@@ -77,3 +77,24 @@ FPS and browser load-to-render measurements could not be collected in this agent
 - Phase 1 parsing remains on the main thread. The UI yields one animation frame to show **Parsing…** before constructing a local-file `SplatMesh`.
 - Remote URLs require CORS. A failed network/CORS fetch directs the user to download and drop the file.
 - Browser/GPU/manual checks above remain required for full Phase 1 acceptance if no in-app browser target is available during deployment verification.
+
+## Review addendum (2026-08-22, post-implementation review)
+
+Manual verification in Chrome (dev server, RTX 5070 Ti laptop, **Chrome was running on the Intel iGPU** — see below):
+
+- `models/splat.ply` (262 k splats, 17 MB): loads via `?url=`, renders correctly, **127 fps** even on the iGPU.
+- `models/Matera_Cave_Museum_7M.ply` (103 MB): this is an **RGB point cloud** (`x y z red green blue`, CloudCompare/Open3D header with `obj_info`), not a Gaussian splat. It has no scale/rotation/opacity, so every point was rendered as a 1 mm Gaussian (Spark `PlyReader.defaultPointScale`) — effectively dust — and all 6.9 M points were pushed through the sort and vertex stage every frame.
+  - After the fixes below: default budget 3 M → 2.3 M points shown, **19 fps on the iGPU**; full 6.9 M → **8 fps on the iGPU** (matches the 7 fps originally reported). The discrete GPU is expected to be several times faster.
+- The reported 7 fps is therefore **not a broken file**; it is 7 M primitives × integrated GPU × no LoD. Check the new **GPU** row in the HUD; `ANGLE (Intel …)` means Chrome is not using the NVIDIA GPU.
+
+Changes made in the review:
+
+- `models/` added to `.gitignore` (a 103 MB file would be rejected by GitHub).
+- `io/loadSplat.ts`: all sources (file, URL, bytes) go through one path so PLY header normalization and point-cloud detection apply to remote files too; Gaussian splat files are loaded with `lod: true, lodAbove: 1_500_000` (Spark builds an LoD tree in a worker only for large files).
+- `io/pointCloud.ts` (new): RGB point clouds get a radius estimated from point spacing (`robust bbox diagonal / sqrt(N) × 0.6`), a point budget (default 3 M, stride-decimated, re-parse on change), and in-place resizing via `utils.setPackedSplatScales`.
+- `viewer/Viewer.ts`: **Up axis** (`y-down` / `y-up` / `z-up`) replaces Flip Y; point clouds default to Z-up (scans), splats to Y-down. **Render scale** setting. GPU renderer string exposed (`WEBGL_debug_renderer_info`) and shown in the HUD.
+- `viewer/SplatDocument.ts`: `kind`, point-cloud metadata, cached robust bounds (was recomputed on every frame/flip call).
+- `ui/panel.ts`: Performance folder (Render scale, Splat extent) and Point cloud folder (Point size ×, Budget) that only shows for point clouds.
+- Toasts explain decimation / LoD / point-cloud handling on load.
+
+Still open: the §9 manual matrix in other browsers (Firefox/Safari) and the 10× reload memory check were not repeated in this review.

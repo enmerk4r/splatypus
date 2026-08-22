@@ -18,9 +18,14 @@ import type { SplatDocument } from './SplatDocument';
 
 export class WebGLUnavailableError extends Error {}
 
+/** Which axis points up in the file. 3DGS training output is Y-down; LiDAR/CloudCompare scans are usually Z-up. */
+export type UpAxis = 'y-down' | 'y-up' | 'z-up';
+
 export class Viewer extends EventTarget {
   readonly cameraRig: CameraRig;
   readonly spark: SparkRenderer;
+  /** Unmasked GPU renderer string when the browser exposes it (e.g. to spot an iGPU). */
+  readonly gpuName: string;
   private readonly canvas: HTMLCanvasElement;
   private readonly renderer: WebGLRenderer;
   private readonly scene = new Scene();
@@ -31,7 +36,8 @@ export class Viewer extends EventTarget {
   private axes?: AxesHelper;
   private gridVisible = true;
   private axesVisible = true;
-  private flipY = true;
+  private upAxisValue: UpAxis = 'y-down';
+  private renderScale = 1;
   private lastFrame = performance.now();
 
   constructor(canvas: HTMLCanvasElement, frameCallback: (now: number) => void) {
@@ -50,7 +56,11 @@ export class Viewer extends EventTarget {
       powerPreference: 'high-performance',
     });
     this.renderer.outputColorSpace = SRGBColorSpace;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2) * this.renderScale);
+    const debugInfo = context.getExtension('WEBGL_debug_renderer_info');
+    this.gpuName = debugInfo
+      ? String(context.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL))
+      : 'GPU: unknown';
     this.scene.background = new Color('#111111');
     this.spark = new SparkRenderer({ renderer: this.renderer });
     this.scene.add(this.spark);
@@ -78,9 +88,15 @@ export class Viewer extends EventTarget {
     return this.gridVisible;
   }
 
+  get document(): SplatDocument | undefined {
+    return this.documentValue;
+  }
+
   setDocument(document: SplatDocument): void {
     this.clearDocument();
     this.documentValue = document;
+    // Scans (RGB point clouds) are almost always Z-up; 3DGS output is Y-down. Users can override.
+    this.upAxisValue = document.kind === 'pointcloud' ? 'z-up' : 'y-down';
     this.applyOrientation();
     this.scene.add(document.mesh);
     const bounds = document.getRobustBounds();
@@ -128,8 +144,12 @@ export class Viewer extends EventTarget {
     if (this.axes) this.axes.visible = visible;
   }
 
-  setFlipY(enabled: boolean): void {
-    this.flipY = enabled;
+  get upAxis(): UpAxis {
+    return this.upAxisValue;
+  }
+
+  setUpAxis(axis: UpAxis): void {
+    this.upAxisValue = axis;
     if (!this.documentValue) return;
     this.applyOrientation();
     const bounds = this.documentValue.getRobustBounds();
@@ -140,6 +160,17 @@ export class Viewer extends EventTarget {
   setFov(value: number): void {
     this.camera.fov = value;
     this.camera.updateProjectionMatrix();
+  }
+
+  get currentRenderScale(): number {
+    return this.renderScale;
+  }
+
+  /** Fraction of device resolution to render at; the cheapest lever for fill-rate-bound scenes. */
+  setRenderScale(scale: number): void {
+    this.renderScale = Math.min(2, Math.max(0.25, scale));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2) * this.renderScale);
+    this.resize();
   }
 
   dispose(): void {
@@ -155,9 +186,20 @@ export class Viewer extends EventTarget {
 
   private applyOrientation(): void {
     if (!this.documentValue) return;
-    // 3DGS is conventionally Y-down; this preserves file coordinates while presenting Y-up.
-    this.documentValue.mesh.quaternion.set(this.flipY ? 1 : 0, 0, 0, this.flipY ? 0 : 1);
-    this.documentValue.mesh.updateMatrixWorld(true);
+    // Only the mesh transform changes; file coordinates are preserved for later export.
+    const mesh = this.documentValue.mesh;
+    switch (this.upAxisValue) {
+      case 'y-down':
+        mesh.quaternion.set(1, 0, 0, 0); // 180° about X
+        break;
+      case 'y-up':
+        mesh.quaternion.set(0, 0, 0, 1);
+        break;
+      case 'z-up':
+        mesh.quaternion.set(-Math.SQRT1_2, 0, 0, Math.SQRT1_2); // −90° about X: Z → Y
+        break;
+    }
+    mesh.updateMatrixWorld(true);
   }
 
   private resetHelpers(center: Vector3, radius: number, floorY: number): void {

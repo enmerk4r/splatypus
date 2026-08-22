@@ -3,3 +3,5 @@ app/dist/
 app/.npm-cache/
 *.tsbuildinfo
 *.log
+# local test scenes (too large for git)
+models/

@@ -13,6 +13,7 @@ export class Hud {
   private readonly count: HTMLElement;
   private readonly file: HTMLElement;
   private readonly status: HTMLElement;
+  private readonly gpu: HTMLElement;
   private readonly progressTrack: HTMLElement;
   private readonly progressBar: HTMLElement;
   private readonly toastRegion: HTMLElement;
@@ -24,9 +25,15 @@ export class Hud {
     this.count = root.querySelector<HTMLElement>('#hud-count')!;
     this.file = root.querySelector<HTMLElement>('#hud-file')!;
     this.status = root.querySelector<HTMLElement>('#hud-status')!;
+    this.gpu = root.querySelector<HTMLElement>('#hud-gpu')!;
     this.progressTrack = root.querySelector<HTMLElement>('#progress-track')!;
     this.progressBar = root.querySelector<HTMLElement>('#progress-bar')!;
     this.toastRegion = toastRegion;
+  }
+
+  setGpu(name: string): void {
+    this.gpu.textContent = name;
+    this.gpu.title = name;
   }
 
   tick(now: number): void {
@@ -39,7 +46,12 @@ export class Hud {
   }
 
   setDocument(document?: SplatDocument): void {
-    this.count.textContent = document ? document.numSplats.toLocaleString() : '—';
+    const info = document?.pointCloud;
+    this.count.textContent = document
+      ? info && info.stride > 1
+        ? `${document.numSplats.toLocaleString()} of ${info.sourcePoints.toLocaleString()} pts`
+        : `${document.numSplats.toLocaleString()}${document.kind === 'pointcloud' ? ' pts' : ''}`
+      : '—';
     this.file.textContent = document
       ? `${document.name} · ${formatBytes(document.byteLength)}`
       : 'No scene';

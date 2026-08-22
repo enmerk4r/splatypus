@@ -1,7 +1,7 @@
 import './style.css';
 import { wireFileInput } from './io/dragDrop';
-import { loadSplat } from './io/loadSplat';
-import type { SplatSource } from './io/loadSplat';
+import { loadSplat, LOD_ABOVE_SPLATS } from './io/loadSplat';
+import type { LoadOptions, SplatSource } from './io/loadSplat';
 import { getInitialSource } from './io/urlParams';
 import { Hud } from './ui/hud';
 import { createPanel } from './ui/panel';
@@ -46,28 +46,45 @@ async function bootstrap(): Promise<void> {
   const openButton = element<HTMLButtonElement>('open-file');
   const sampleSelect = element<HTMLSelectElement>('sample-select');
   const flyHint = element('fly-hint');
-  const panel = createPanel(viewer, element('panel'));
+  hud.setGpu(viewer.gpuName);
   let loadSequence = 0;
 
-  const openSource = async (source: SplatSource): Promise<void> => {
+  const openSource = async (source: SplatSource, options: LoadOptions = {}): Promise<void> => {
     const sequence = ++loadSequence;
     viewer.clearDocument();
     hud.setDocument();
     emptyState.classList.add('loading');
     hud.setProgress({ phase: 'loading' });
     try {
-      const loaded = await loadSplat(source, (progress) => {
-        if (sequence === loadSequence) hud.setProgress(progress);
-      });
+      const loaded = await loadSplat(
+        source,
+        (progress) => {
+          if (sequence === loadSequence) hud.setProgress(progress);
+        },
+        options,
+      );
       if (sequence !== loadSequence) {
         loaded.mesh.dispose();
         return;
       }
-      const document = new SplatDocument(loaded.mesh, loaded.name, loaded.byteLength);
+      const document = new SplatDocument(loaded.mesh, loaded.name, loaded.byteLength, loaded.kind, {
+        ...(loaded.bytes ? { bytes: loaded.bytes } : {}),
+        ...(loaded.pointCloud ? { pointCloud: loaded.pointCloud } : {}),
+      });
       viewer.setDocument(document);
       hud.setDocument(document);
       hud.setReady();
       emptyState.hidden = true;
+      const info = loaded.pointCloud;
+      if (info && info.stride > 1) {
+        hud.toast(
+          `RGB point cloud: showing ${info.keptPoints.toLocaleString()} of ${info.sourcePoints.toLocaleString()} points (every ${info.stride}th). Raise the budget in VIEW › Point cloud.`,
+        );
+      } else if (info) {
+        hud.toast('RGB point cloud (not a Gaussian splat): point size estimated from spacing.');
+      } else if (loaded.mesh.numSplats >= LOD_ABOVE_SPLATS) {
+        hud.toast('Large scene: rendering with a level-of-detail tree built at load time.');
+      }
     } catch (error) {
       if (sequence !== loadSequence) return;
       const message = error instanceof Error ? error.message : 'The splat could not be opened.';
@@ -79,6 +96,20 @@ async function bootstrap(): Promise<void> {
       if (sequence === loadSequence) emptyState.classList.remove('loading');
     }
   };
+
+  const panel = createPanel(viewer, element('panel'), {
+    onPointBudgetChange: (pointBudget) => {
+      const current = viewer.document;
+      if (!current?.bytes) return;
+      void openSource(
+        { kind: 'bytes', bytes: current.bytes, fileName: current.name },
+        {
+          pointBudget,
+          ...(current.pointSizeMul !== undefined ? { pointSizeMul: current.pointSizeMul } : {}),
+        },
+      );
+    },
+  });
 
   const disposeDrop = wireFileInput(
     fileInput,

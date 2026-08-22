@@ -44,7 +44,14 @@ Quality checks run with `npm run lint`.
 
 ## Coordinate convention
 
-3D Gaussian Splatting files are normally Y-down. Splatypus applies a 180° rotation about X after loading so the viewer, grid, and OrbitControls use the three.js Y-up convention. The source coordinates are not modified. Disable **Flip Y** in the View panel for files that are already Y-up.
+3D Gaussian Splatting files are normally Y-down. Splatypus applies a 180° rotation about X after loading so the viewer, grid, and OrbitControls use the three.js Y-up convention. The source coordinates are not modified. Use **Up axis** in the VIEW panel to override: `Y-down (3DGS)` (default for splats), `Y-up`, or `Z-up (scans)` (default for RGB point clouds, which usually come from LiDAR/CloudCompare).
+
+## Large scenes and performance
+
+- **Check the GPU row in the HUD first.** On laptops with two GPUs Chrome often runs on the integrated one (`ANGLE (Intel …)`), which is several times slower for splats. Force the discrete GPU in Windows *Settings → System → Display → Graphics → add Chrome → High performance* (macOS picks automatically), then restart Chrome.
+- Splat files above 1.5 M splats are loaded with Spark's load-time **level-of-detail tree** (built in a worker, ~1–3 s per million splats) and rendered as a view-dependent subset, so very large scans stay interactive.
+- **RGB point clouds** (`x y z red green blue` PLY from CloudCompare/Open3D/LiDAR) are not Gaussian splats but are supported: each point becomes a small isotropic Gaussian whose radius is estimated from point spacing. They are capped at a **point budget** (default 3 M, stride-decimated) and can be resized/rebudgeted in *VIEW › Point cloud*. Point clouds render without LoD, so frame rate scales with the budget.
+- **Render scale** (*VIEW › Performance*) lowers the internal resolution for fill-rate-bound scenes.
 
 ## Deploy
 
@@ -55,7 +62,8 @@ Every push to `main` runs the Pages workflow, builds `app/`, and deploys `app/di
 ## Known issues
 
 - Remote files must be served with CORS headers. If they are not, download the file and drop it into the viewer.
-- Large PLY files are parsed on the main thread in Phase 1, so interaction may pause briefly during the visible **Parsing…** state.
+- Large PLY files are parsed on the main thread in Phase 1, so interaction may pause briefly during the visible **Parsing…** state (several seconds for a 100 MB point cloud).
+- Remote `?url=` files are fully downloaded before parsing (no streaming) so that the same PLY compatibility fixes apply to local and remote files.
 - Spark raycasting is synchronous and can take a moment on multi-million-splat scenes; it only runs on double-click.
 - Desktop Chrome, Firefox, and Safari are the Phase 1 targets. Mobile layouts are usable but are not part of the acceptance gate.
 
