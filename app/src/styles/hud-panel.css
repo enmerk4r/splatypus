@@ -24,15 +24,11 @@
 }
 
 .brand-mark {
-  display: grid;
-  width: 21px;
-  height: 21px;
-  place-items: center;
-  border-radius: 50%;
-  color: #111;
-  background: var(--lime);
-  font-size: 11px;
-  letter-spacing: 0;
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  /* The mark is lime in the file; a faint glow lifts it off the glass panel. */
+  filter: drop-shadow(0 0 6px rgba(184, 243, 74, 0.35));
 }
 
 .hud dl {

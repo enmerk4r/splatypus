@@ -8,6 +8,7 @@
       name="description"
       content="Splatypus is a private, browser-based Gaussian splat viewer."
     />
+    <link rel="icon" type="image/svg+xml" href="./logo.svg" />
     <title>Splatypus — Gaussian splat viewer</title>
   </head>
   <body>
@@ -15,6 +16,7 @@
       <canvas id="viewer" aria-label="3D Gaussian splat viewer"></canvas>
 
       <section id="empty-state" class="empty-state" aria-labelledby="empty-title">
+        <img class="empty-logo" src="./logo.svg" alt="Splatypus" />
         <span class="eyebrow">LOCAL-FIRST 3D VIEWER</span>
         <h1 id="empty-title">Drop a splat.<br />Explore the scene.</h1>
         <p>
@@ -36,7 +38,9 @@
       <input id="file-input" class="sr-only" type="file" accept=".ply,.spz,.splat,.ksplat,.sog" />
 
       <aside id="hud" class="hud" aria-live="polite">
-        <div class="brand"><span class="brand-mark">S</span><span>SPLATYPUS</span></div>
+        <div class="brand">
+          <img class="brand-mark" src="./logo.svg" alt="" /><span>SPLATYPUS</span>
+        </div>
         <dl>
           <div>
             <dt>FPS</dt>

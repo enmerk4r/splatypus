@@ -68,6 +68,31 @@ select:focus-visible {
   opacity: 0.38;
 }
 
+.empty-logo {
+  width: clamp(64px, 9vw, 96px);
+  height: auto;
+  margin-bottom: 22px;
+  filter: drop-shadow(0 0 28px rgba(184, 243, 74, 0.28));
+  animation: logo-in 700ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes logo-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .empty-logo {
+    animation: none;
+  }
+}
+
 .eyebrow {
   margin-bottom: 24px;
   color: var(--lime);
