@@ -25,6 +25,51 @@
   font-size: 9px;
 }
 
+.panel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 11px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  color: #e9f0eb;
+  background: transparent;
+  font: inherit;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-align: left;
+  cursor: pointer;
+}
+
+.panel-head svg {
+  flex: none;
+}
+
+.panel-chevron {
+  display: grid;
+  margin-left: auto;
+  color: #8e9992;
+  transition: transform 150ms ease;
+}
+
+.layers-panel.collapsed .panel-head {
+  border-bottom: 0;
+}
+
+.layers-panel.collapsed .panel-chevron {
+  transform: rotate(-90deg);
+}
+
+.layers-panel.collapsed .panel-body {
+  display: none;
+}
+
+.panel-host .tp-rotv_t svg {
+  margin-right: 6px;
+  vertical-align: -2px;
+}
+
 .layers-header,
 .layers-footer {
   padding: 10px 11px;

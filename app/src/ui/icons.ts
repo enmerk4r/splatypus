@@ -21,6 +21,11 @@ const PATHS: Record<string, string> = {
   floor: 'M8 1.5v8M4.6 6.1 8 9.5l3.4-3.4M2 13.5h12',
   merge: 'M14 2v12M2 8h9M8 5l3 3-3 3',
   delete: 'M2.5 4h11M5.5 4V2.5h5V4M4 4v10h8V4M6.5 6.5v5M9.5 6.5v5',
+  // Panel headers
+  view: 'M1 8s2.6-4.5 7-4.5S15 8 15 8s-2.6 4.5-7 4.5S1 8 1 8ZM8 6a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z',
+  layers: 'M8 2 14 5.5 8 9 2 5.5ZM2 8.5l6 3.5 6-3.5M2 11.5 8 15l6-3.5',
+  segment: 'M2 2h5v5H2zM9 2h5v5H9zM2 9h5v5H2zM9 9h5v5H9z',
+  chevron: 'M4 6l4 4 4-4',
 };
 
 export function icon(name: string): string {

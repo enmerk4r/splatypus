@@ -1,4 +1,5 @@
 import type { Document } from '../model/Document';
+import type { ToastLevel } from './hud';
 import { exportPly } from '../io/exportPly';
 import { estimateGaussianPlyBytes } from '../io/plyWriter';
 import { prepareSaveFile } from '../io/saveFile';
@@ -21,7 +22,7 @@ export function createExportDialog(
   dialog: HTMLDialogElement,
   button: HTMLButtonElement,
   getDocument: () => Document | undefined,
-  toast: (message: string) => void,
+  toast: (message: string, level?: ToastLevel) => void,
 ): { open: () => void; dispose: () => void } {
   const form = dialog.querySelector<HTMLFormElement>('form')!;
   const hidden = dialog.querySelector<HTMLInputElement>('#export-hidden')!;
@@ -47,7 +48,7 @@ export function createExportDialog(
   const open = (): void => {
     const document = getDocument();
     if (!document || document.layers.length === 0) {
-      toast('Open a scene before exporting.');
+      toast('Open a scene before exporting.', 'warning');
       return;
     }
     hidden.checked = false;
@@ -84,7 +85,7 @@ export function createExportDialog(
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === 'AbortError') return;
         console.error(error);
-        toast(`Export failed: ${error instanceof Error ? error.message : String(error)}`);
+        toast(`Export failed: ${error instanceof Error ? error.message : String(error)}`, 'error');
       })
       .finally(() => {
         submit.disabled = false;

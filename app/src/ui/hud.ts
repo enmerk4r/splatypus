@@ -1,6 +1,8 @@
 import type { Document } from '../model/Document';
 import type { LoadProgress } from '../io/loadSplat';
 
+export type ToastLevel = 'info' | 'warning' | 'error';
+
 export class Hud {
   private readonly fps: HTMLElement;
   private readonly count: HTMLElement;
@@ -78,9 +80,10 @@ export class Hud {
     this.progressTrack.hidden = true;
   }
 
-  toast(message: string): void {
-    const toast = this.makeToast(message);
-    window.setTimeout(() => this.dismiss(toast), 5500);
+  /** Info is lime, warnings yellow, errors amber. */
+  toast(message: string, level: ToastLevel = 'info'): void {
+    const toast = this.makeToast(message, false, level);
+    window.setTimeout(() => this.dismiss(toast), level === 'error' ? 7000 : 5000);
   }
 
   confirm(message: string, actionLabel: string): Promise<boolean> {
@@ -117,12 +120,12 @@ export class Hud {
   private readonly onHistoryChanged = (event: Event): void => {
     const { action, label } = (event as CustomEvent<{ action: string; label: string }>).detail;
     if ((action === 'undo' || action === 'redo') && label)
-      this.toast(`${action === 'undo' ? 'Undo' : 'Redo'}: ${label}`);
+      this.toast(`${action === 'undo' ? 'Undo' : 'Redo'}: ${label}`, 'info');
   };
 
-  private makeToast(message: string, persistent = false): HTMLElement {
+  private makeToast(message: string, persistent = false, level: ToastLevel = 'info'): HTMLElement {
     const toast = document.createElement('div');
-    toast.className = `toast${persistent ? ' toast-persistent' : ''}`;
+    toast.className = `toast toast-${level}${persistent ? ' toast-persistent' : ''}`;
     const text = document.createElement('span');
     text.textContent = message;
     toast.append(text);

@@ -47,7 +47,10 @@ export class AppImports {
       if (sequence !== this.sequence) return;
       console.error(error);
       this.hud.setError();
-      this.hud.toast(error instanceof Error ? error.message : 'The splat could not be opened.');
+      this.hud.toast(
+        error instanceof Error ? error.message : 'The splat could not be opened.',
+        'error',
+      );
       this.emptyState.hidden = Boolean(this.viewer.document);
     } finally {
       if (sequence === this.sequence) this.emptyState.classList.remove('loading');
@@ -99,7 +102,10 @@ export class AppImports {
       loaded.forEach(({ layer }) => layer.dispose());
       console.error(error);
       this.hud.setError();
-      this.hud.toast(error instanceof Error ? error.message : 'Could not add those files.');
+      this.hud.toast(
+        error instanceof Error ? error.message : 'Could not add those files.',
+        'error',
+      );
     }
   }
 
@@ -108,7 +114,7 @@ export class AppImports {
     const layer = model?.getLayer(layerId);
     if (!model || !layer?.pointCloud || !layer.sourceBytes) return;
     if (layer.locked) {
-      this.hud.toast('Unlock the layer before editing it.');
+      this.hud.toast('Unlock the layer before editing it.', 'warning');
       return;
     }
     this.hud.setProgress({ phase: 'parsing' });
@@ -136,7 +142,10 @@ export class AppImports {
     } catch (error) {
       console.error(error);
       this.hud.setError();
-      this.hud.toast(error instanceof Error ? error.message : 'Could not change the point budget.');
+      this.hud.toast(
+        error instanceof Error ? error.message : 'Could not change the point budget.',
+        'error',
+      );
     }
   }
 
@@ -150,12 +159,16 @@ export class AppImports {
       `Decoded ${loaded.layer.store.liveCount().toLocaleString()} splats in ${loaded.decodeMs.toFixed(0)} ms; synced in ${loaded.syncMs.toFixed(0)} ms.`,
     );
     if (loaded.lossy)
-      this.hud.toast(`Imported with ${loaded.lossy}; export preserves the decoded values.`);
-    loaded.warnings.forEach((warning) => this.hud.toast(warning));
+      this.hud.toast(
+        `Imported with ${loaded.lossy}; export preserves the decoded values.`,
+        'warning',
+      );
+    loaded.warnings.forEach((warning) => this.hud.toast(warning, 'warning'));
     const info = loaded.layer.pointCloud;
     if (info?.stride && info.stride > 1)
       this.hud.toast(
         `RGB point cloud: showing ${info.keptPoints.toLocaleString()} of ${info.sourcePoints.toLocaleString()} points.`,
+        'warning',
       );
     else if (info) this.hud.toast('RGB point cloud: point size estimated from spacing.');
     else if (loaded.layer.store.liveCount() >= LOD_ABOVE_SPLATS)

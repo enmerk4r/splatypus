@@ -13,10 +13,12 @@ import {
   SetLayerVisible,
 } from '../model/commands';
 import type { Viewer } from '../viewer/Viewer';
+import { createPanelShell } from './collapse';
+import type { ToastLevel } from './hud';
 
 export interface LayersPanelCallbacks {
   onAdd: () => void;
-  onError: (message: string) => void;
+  notify: (message: string, level?: ToastLevel) => void;
 }
 
 const KIND_COLORS: Record<LayerKind, string> = {
@@ -39,15 +41,19 @@ export function createLayersPanel(
 ): { dispose: () => void } {
   let observed: Document | undefined;
   let anchorId: string | undefined;
+  const shell = createPanelShell(root, 'LAYERS', 'layers');
+  const body = shell.body;
 
   const execute = (action: () => void): void => {
     try {
       action();
     } catch (error) {
-      callbacks.onError(
-        error instanceof LockedLayerError ? error.message : 'That layer action failed.',
+      const locked = error instanceof LockedLayerError;
+      callbacks.notify(
+        locked ? error.message : 'That layer action failed.',
+        locked ? 'warning' : 'error',
       );
-      if (!(error instanceof LockedLayerError)) console.error(error);
+      if (!locked) console.error(error);
     }
   };
 
@@ -164,12 +170,9 @@ export function createLayersPanel(
 
   const render = (): void => {
     const model = observed;
-    root.replaceChildren();
+    body.replaceChildren();
     root.hidden = !model || model.layers.length === 0;
     if (!model || model.layers.length === 0) return;
-    const header = document.createElement('div');
-    header.className = 'layers-header';
-    header.textContent = 'LAYERS';
     const list = document.createElement('div');
     list.className = 'layers-list';
     const displayed = [...model.layers].reverse();
@@ -259,7 +262,7 @@ export function createLayersPanel(
     const footer = document.createElement('div');
     footer.className = 'layers-footer';
     footer.textContent = `${model.layers.length} layers · ${compactCount(model.totalLive())} splats · ${compactCount(model.hiddenCount())} hidden`;
-    root.append(header, list, toolbar, footer);
+    body.append(list, toolbar, footer);
   };
 
   const observe = (): void => {
@@ -280,6 +283,7 @@ export function createLayersPanel(
       observed?.removeEventListener('layers-changed', render);
       observed?.removeEventListener('layer-changed', render);
       observed?.removeEventListener('selection-changed', render);
+      shell.dispose();
     },
   };
 }

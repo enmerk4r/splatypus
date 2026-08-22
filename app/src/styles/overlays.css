@@ -37,15 +37,39 @@
 
 .toast {
   padding: 13px 15px;
-  border: 1px solid rgba(255, 133, 104, 0.42);
+  border: 1px solid rgba(184, 243, 74, 0.45);
   border-radius: 5px;
   opacity: 0;
-  color: #ffe8e1;
-  background: rgba(45, 20, 15, 0.92);
+  color: #eef4ef;
+  background: rgba(18, 27, 16, 0.94);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
   transform: translateY(8px);
   transition: 220ms ease;
   font-size: 13px;
+}
+
+.toast-warning {
+  border-color: rgba(250, 204, 21, 0.5);
+  color: #fff6d6;
+  background: rgba(44, 36, 10, 0.94);
+}
+
+.toast-error {
+  border-color: rgba(255, 133, 104, 0.42);
+  color: #ffe8e1;
+  background: rgba(45, 20, 15, 0.92);
+}
+
+.toast-warning {
+  border-color: rgba(250, 204, 21, 0.5);
+  color: #fff6d6;
+  background: rgba(44, 36, 10, 0.94);
+}
+
+.toast-error {
+  border-color: rgba(255, 133, 104, 0.42);
+  color: #ffe8e1;
+  background: rgba(45, 20, 15, 0.92);
 }
 
 .toast-persistent {

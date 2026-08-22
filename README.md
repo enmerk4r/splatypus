@@ -56,7 +56,9 @@ Shift-drop adds a single file to the current document. Dropping multiple files a
 
 The **LAYERS** panel lists the topmost layer first. Click to select, Ctrl/Cmd-click to toggle, and Shift-click to select a range. Its toolbar adds, duplicates, merges, deletes, and reorders layers. Double-click a layer name to rename it. Eye, lock, rename, order, transforms, duplicate, merge, delete, and point-cloud parameter changes participate in undo/redo.
 
-The transform gizmo appears when exactly one unlocked layer is selected. Export bakes each layer's translate/rotate/uniform-scale transform into its splats but intentionally does not bake the viewer-only up-axis root transform.
+The transform gizmo appears when exactly one unlocked layer is selected. In scale mode, dragging one axis handle scales along that axis only, a plane handle scales in two axes, and the centre handle scales uniformly. Uniform scale stays a layer transform; non-uniform scale is baked into the splat data on release (centres scaled, each gaussian's covariance re-diagonalised — Spark only renders uniform object scales), as one undoable step. Export bakes each layer's translate/rotate/uniform-scale transform into its splats but intentionally does not bake the viewer-only up-axis root transform.
+
+The right-hand panels (VIEW, LAYERS, SEGMENT) collapse from their headers; the state is remembered per browser. Notifications are colour-coded: lime = info, yellow = warning, amber = error.
 
 ## Segmentation and object tools
 

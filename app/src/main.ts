@@ -64,7 +64,10 @@ async function bootstrap(): Promise<void> {
   const attachGroups = async (file: File): Promise<void> => {
     const target = segmentation.targetLayer();
     if (!target) {
-      hud.toast('Open a splat (and select a layer) first, then drop its .groups sidecar.');
+      hud.toast(
+        'Open a splat (and select a layer) first, then drop its .groups sidecar.',
+        'warning',
+      );
       return;
     }
     try {
@@ -74,7 +77,10 @@ async function bootstrap(): Promise<void> {
       );
       hud.toast(`Loaded ${target.groups?.numGroups ?? 0} groups onto “${target.name}”.`);
     } catch (error) {
-      hud.toast(error instanceof GroupMapError ? error.message : `Couldn't read ${file.name}.`);
+      hud.toast(
+        error instanceof GroupMapError ? error.message : `Couldn't read ${file.name}.`,
+        'error',
+      );
     }
   };
 
@@ -93,11 +99,14 @@ async function bootstrap(): Promise<void> {
           (error: unknown) => {
             hud.toast(
               error instanceof GroupMapError ? error.message : `Couldn't read ${groupsUrl}.`,
+              'error',
             );
             return undefined;
           },
         )
-      : await tryLoadSidecar(source.url, layer.store.count, (message) => hud.toast(message));
+      : await tryLoadSidecar(source.url, layer.store.count, (message) =>
+          hud.toast(message, 'error'),
+        );
     if (groups && viewer.document === document) {
       segmentation.applyGroups(layer, groups);
       hud.toast(`Loaded ${groups.numGroups} groups from the .groups sidecar.`);
@@ -109,8 +118,9 @@ async function bootstrap(): Promise<void> {
       action();
       return true;
     } catch (error) {
-      hud.toast(error instanceof LockedLayerError ? error.message : 'That action failed.');
-      if (!(error instanceof LockedLayerError)) console.error(error);
+      const locked = error instanceof LockedLayerError;
+      hud.toast(locked ? error.message : 'That action failed.', locked ? 'warning' : 'error');
+      if (!locked) console.error(error);
       return false;
     }
   };
@@ -126,20 +136,20 @@ async function bootstrap(): Promise<void> {
   });
   const layersPanel = createLayersPanel(viewer, element('layers-panel'), {
     onAdd: () => addInput.click(),
-    onError: (message) => hud.toast(message),
+    notify: (message, level) => hud.toast(message, level),
   });
   const segmentPanel = createSegmentPanel(viewer, segmentation, crop, element('segment-panel'), {
-    onError: (message) => hud.toast(message),
+    notify: (message, level) => hud.toast(message, level),
   });
   const hoverLabel = createHoverLabel(element('hover-label'), segmentation);
   const toolbar = createToolbar(viewer, segmentation, element('toolbar'), {
-    onError: (message) => hud.toast(message),
+    notify: (message, level) => hud.toast(message, level),
   });
   const exportDialog = createExportDialog(
     element<HTMLDialogElement>('export-dialog'),
     element<HTMLButtonElement>('export-file'),
     () => viewer.document,
-    (message) => hud.toast(message),
+    (message, level) => hud.toast(message, level),
   );
   const disposeDrop = wireFileInput(
     openInput,
@@ -150,14 +160,14 @@ async function bootstrap(): Promise<void> {
       onOpen: (file) => void imports.open({ kind: 'file', file }),
       onAdd: (files) => void imports.add(files),
       onGroups: (file) => void attachGroups(file),
-      onError: (message) => hud.toast(message),
+      onError: (message, level) => hud.toast(message, level ?? 'error'),
     },
   );
   const disposeShortcuts = wireShortcuts(viewer, {
     openFile: () => openInput.click(),
     addFile: () => addInput.click(),
     exportFile: exportDialog.open,
-    onError: (message) => hud.toast(message),
+    notify: (message, level) => hud.toast(message, level),
   });
 
   viewer.addEventListener('document-changed', (event) => {
@@ -180,7 +190,7 @@ async function bootstrap(): Promise<void> {
     }
   } catch (error) {
     console.error(error);
-    hud.toast('The sample gallery is unavailable. You can still open a local file.');
+    hud.toast('The sample gallery is unavailable. You can still open a local file.', 'warning');
   }
   sampleSelect.addEventListener('change', () => {
     const sample = samples.find((candidate) => candidate.name === sampleSelect.value);
@@ -195,7 +205,7 @@ async function bootstrap(): Promise<void> {
     if (sample) {
       sampleSelect.value = sample.name;
       void openWithSidecar({ kind: 'url', url: sample.url, name: sample.name }, initial.groups);
-    } else hud.toast(`Unknown sample “${initial.sample}”.`);
+    } else hud.toast(`Unknown sample “${initial.sample}”.`, 'warning');
   }
 
   // Dev-only console hook: `__splatypus.viewer.document`, `__splatypus.viewer.renderOnce()`.

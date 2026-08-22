@@ -6,10 +6,11 @@ import { ArrayLayer, snapToFloorCommand } from '../model/segmentCommands';
 import type { Segmentation } from '../select/Segmentation';
 import type { TransformMode } from '../viewer/LayerGizmo';
 import type { Viewer } from '../viewer/Viewer';
+import type { ToastLevel } from './hud';
 import { icon } from './icons';
 
 export interface ToolbarCallbacks {
-  onError: (message: string) => void;
+  notify: (message: string, level?: ToastLevel) => void;
 }
 
 /**
@@ -59,8 +60,12 @@ export function createToolbar(
     try {
       action();
     } catch (error) {
-      callbacks.onError(error instanceof LockedLayerError ? error.message : 'That action failed.');
-      if (!(error instanceof LockedLayerError)) console.error(error);
+      const locked = error instanceof LockedLayerError;
+      callbacks.notify(
+        locked ? error.message : 'That action failed.',
+        locked ? 'warning' : 'error',
+      );
+      if (!locked) console.error(error);
     }
   };
 

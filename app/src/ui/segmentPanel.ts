@@ -2,9 +2,11 @@ import type { CropBox, CropMode } from '../select/CropBox';
 import type { BakeBasis, Segmentation } from '../select/Segmentation';
 import type { GroupMap } from '../splats/groups';
 import type { Viewer } from '../viewer/Viewer';
+import { createPanelShell } from './collapse';
+import type { ToastLevel } from './hud';
 
 export interface SegmentPanelCallbacks {
-  onError: (message: string) => void;
+  notify: (message: string, level?: ToastLevel) => void;
 }
 
 /**
@@ -18,8 +20,8 @@ export function createSegmentPanel(
   root: HTMLElement,
   callbacks: SegmentPanelCallbacks,
 ): { dispose: () => void } {
-  root.innerHTML = `
-    <div class="layers-header">SEGMENT</div>
+  const shell = createPanelShell(root, 'SEGMENT', 'segment');
+  shell.body.innerHTML = `
     <div class="segment-body">
       <div class="segment-row">
         <label for="segment-basis">By</label>
@@ -134,11 +136,11 @@ export function createSegmentPanel(
     window.setTimeout(() => {
       try {
         const result = segmentation.rebake(target, basis.value as BakeBasis, Number(detail.value));
-        callbacks.onError(
+        callbacks.notify(
           `${result.numGroups} groups · ${result.assigned.toLocaleString()} of ${target.store.count.toLocaleString()} splats assigned.`,
         );
       } catch (error) {
-        callbacks.onError(error instanceof Error ? error.message : 'Segmentation failed.');
+        callbacks.notify(error instanceof Error ? error.message : 'Segmentation failed.', 'error');
       }
       render();
     }, 30);
@@ -149,7 +151,10 @@ export function createSegmentPanel(
     try {
       segmentation.splitSelection();
     } catch (error) {
-      callbacks.onError(error instanceof Error ? error.message : 'Could not split the selection.');
+      callbacks.notify(
+        error instanceof Error ? error.message : 'Could not split the selection.',
+        'error',
+      );
     }
   };
   const onClear = (): void => segmentation.select(undefined);
@@ -158,9 +163,8 @@ export function createSegmentPanel(
   const onCropResize = (): void => crop.setMode('scale');
   const runCrop = (keep: 'inside' | 'outside') => (): void => {
     const hidden = crop.apply(keep);
-    callbacks.onError(
-      hidden ? `${hidden.toLocaleString()} splats hidden (Ctrl+Z to undo).` : 'Nothing to crop.',
-    );
+    if (hidden) callbacks.notify(`${hidden.toLocaleString()} splats hidden (Ctrl+Z to undo).`);
+    else callbacks.notify('Nothing to crop.', 'warning');
   };
   const onKeep = runCrop('inside');
   const onCut = runCrop('outside');
@@ -204,6 +208,7 @@ export function createSegmentPanel(
       segmentation.removeEventListener('groups-changed', render);
       segmentation.removeEventListener('overlay-changed', render);
       crop.removeEventListener('crop-changed', render);
+      shell.dispose();
     },
   };
 }

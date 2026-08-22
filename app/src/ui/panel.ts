@@ -1,4 +1,5 @@
 import { Pane } from 'tweakpane';
+import { icon } from './icons';
 import type { Layer } from '../model/Layer';
 import { DEFAULT_POINT_BUDGET } from '../io/pointCloud';
 import type { CameraMode } from '../viewer/CameraRig';
@@ -40,6 +41,8 @@ export function createPanel(
     pointBudgetM: DEFAULT_POINT_BUDGET / 1e6,
   };
   const pane = new Pane({ title: 'VIEW', expanded: false, container });
+  // Tweakpane's title is text-only; put the eye in front of it like the other panel headers.
+  container.querySelector('.tp-rotv_t')?.insertAdjacentHTML('afterbegin', icon('view'));
   pane
     .addBinding(settings, 'background', { label: 'Background', view: 'color' })
     .on('change', (event) => viewer.setBackground(event.value));

@@ -11,7 +11,7 @@ export interface FileInputCallbacks {
   onAdd: (files: File[]) => void;
   /** A `.groups` segmentation sidecar attaches to the open scene instead of replacing it. */
   onGroups?: (file: File) => void;
-  onError: (message: string) => void;
+  onError: (message: string, level?: 'warning' | 'error') => void;
 }
 
 export function wireFileInput(
@@ -31,10 +31,11 @@ export function wireFileInput(
     if (groups.length + splats.length !== files.length)
       callbacks.onError(
         'Unsupported file skipped. Choose PLY, SPZ, SPLAT, KSPLAT, SOG, or .groups files.',
+        'warning',
       );
     for (const file of groups) {
       if (callbacks.onGroups) callbacks.onGroups(file);
-      else callbacks.onError('Open a splat first, then drop its .groups sidecar.');
+      else callbacks.onError('Open a splat first, then drop its .groups sidecar.', 'warning');
     }
     if (splats.length) deliver(splats);
   };

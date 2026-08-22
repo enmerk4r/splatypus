@@ -146,9 +146,9 @@ export class Layer extends EventTarget {
     );
   }
 
-  /** Call after the alive mask changed (the grid itself only needs rebuilding when centres move). */
+  /** Call after centres changed; the grid is rebuilt on next use (dead splats are filtered at query time). */
   invalidatePick(): void {
-    // Dead splats are filtered at query time; nothing to rebuild for now.
+    this.gridValue = undefined;
   }
 
   async sync(): Promise<number> {

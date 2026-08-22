@@ -1,4 +1,6 @@
 import { Matrix4, Quaternion, Vector3 } from 'three';
+import { bakeAnisotropicScale } from './anisotropic';
+import type { Factor3 } from './anisotropic';
 import type { Document } from './Document';
 import { Layer } from './Layer';
 import { DuplicateLayer, SetLayerTransform } from './compoundCommands';
@@ -138,6 +140,55 @@ export class SplitSplats implements Command {
 
   dispose(): void {
     if (!this.attached) this.segment.dispose();
+  }
+}
+
+/**
+ * Bakes a non-uniform scale (layer-local axes) into a layer's splats. Spark renders a
+ * layer's Object3D with a uniform scale only, so anisotropic scaling has to change the
+ * data: centres scale, covariances are re-diagonalised. Undo restores exact snapshots.
+ */
+export class ScaleSplats implements Command {
+  readonly label: string;
+  private snapshot?: { centers: Float32Array; scales: Float32Array; rotations: Float32Array };
+  constructor(
+    private readonly document: Document,
+    private readonly layerId: string,
+    private readonly factor: Factor3,
+  ) {
+    this.label = `Scale ×${factor.map((value) => value.toFixed(2)).join(' · ')}`;
+  }
+  private layer(): Layer {
+    const layer = this.document.getLayer(this.layerId);
+    if (!layer) throw new Error('Layer no longer exists');
+    if (layer.locked) throw new LockedLayerError('Unlock the layer before scaling it.');
+    return layer;
+  }
+  do(): void {
+    const layer = this.layer();
+    const { store } = layer;
+    this.snapshot = {
+      centers: store.centers.slice(),
+      scales: store.scales.slice(),
+      rotations: store.rotations.slice(),
+    };
+    bakeAnisotropicScale(store, this.factor);
+    layer.invalidatePick();
+    layer.dirty = true;
+    void layer.sync();
+    this.document.notifyLayerChanged(layer.id);
+  }
+  undo(): void {
+    const layer = this.layer();
+    if (!this.snapshot) return;
+    layer.store.centers.set(this.snapshot.centers);
+    layer.store.scales.set(this.snapshot.scales);
+    layer.store.rotations.set(this.snapshot.rotations);
+    layer.store.invalidateBounds();
+    layer.invalidatePick();
+    layer.dirty = true;
+    void layer.sync();
+    this.document.notifyLayerChanged(layer.id);
   }
 }
 

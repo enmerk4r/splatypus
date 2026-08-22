@@ -1,11 +1,12 @@
 import { LockedLayerError, RemoveLayers } from '../model/commands';
 import type { Viewer } from '../viewer/Viewer';
+import type { ToastLevel } from './hud';
 
 export interface ShortcutActions {
   openFile: () => void;
   addFile: () => void;
   exportFile: () => void;
-  onError: (message: string) => void;
+  notify: (message: string, level?: ToastLevel) => void;
 }
 
 export function wireShortcuts(viewer: Viewer, actions: ShortcutActions): () => void {
@@ -13,8 +14,9 @@ export function wireShortcuts(viewer: Viewer, actions: ShortcutActions): () => v
     try {
       action();
     } catch (error) {
-      actions.onError(error instanceof LockedLayerError ? error.message : 'That action failed.');
-      if (!(error instanceof LockedLayerError)) console.error(error);
+      const locked = error instanceof LockedLayerError;
+      actions.notify(locked ? error.message : 'That action failed.', locked ? 'warning' : 'error');
+      if (!locked) console.error(error);
     }
   };
   const onKeyDown = (event: KeyboardEvent): void => {
