@@ -113,23 +113,15 @@ select:focus-visible {
 }
 
 .empty-state .tagline {
-  margin: 16px 0 0;
+  margin: 16px 0 28px;
   color: var(--lime);
   font-family: 'SFMono-Regular', Consolas, monospace;
-  font-size: 14px;
+  /* Tracks the wordmark's responsive size at the ratio needed for equal text width. */
+  font-size: clamp(9.75px, 1.58vw, 18.5px);
   font-weight: 600;
   letter-spacing: 0.08em;
-}
-
-.empty-state .hint {
-  margin: 22px 0 24px;
-  color: #a7b1ab;
-  font-size: 15px;
-  line-height: 1.6;
-}
-
-.empty-state .hint span {
-  color: #747e78;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 .empty-actions {
   display: flex;
