@@ -121,6 +121,7 @@ Phase 1 is the only hard gate; after that, phases 3–6 are largely parallelizab
 - **Done when:** load → delete half the layers → export → reopen elsewhere works.
 
 ### Phase 3 — Sketching (the novelty)
+*Full handoff spec (placement modes, stamp maths, preview/commit, commands, panel, acceptance): [`docs/PHASE3_SPEC.md`](docs/PHASE3_SPEC.md).*
 - **Stroke placement:** (a) surface — ray → nearest splat via voxel grid, tiny depth bias; (b) depth-locked — continue at the depth of the first hit, or a fixed distance if starting in the void; (c) stretch: 3D cursor / construction plane.
 - **Stroke → gaussians:** pointer events (pressure, coalesced), EMA smoothing, resample to fixed arc-length spacing, one stamp per sample: oriented gaussian(s) (quat from tangent × view/normal), scale `(r·stretch, r, r·flat)`, jitter.
 - Presets: **Ink** (thin ribbon facing camera), **Tube** (round 3D stroke — massing), **Marker** (wide translucent), **Spray** (random gaussians in a sphere — blobs/vegetation).
