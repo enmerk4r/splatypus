@@ -55,6 +55,7 @@ const PATHS: Record<string, string> = {
   fade: 'M8 1.5a6.5 6.5 0 1 0 0 13zM8 1.5a6.5 6.5 0 0 1 0 13',
   grab: 'M5 8V3.5a1 1 0 0 1 2 0V7M7 7V2.5a1 1 0 0 1 2 0V7M9 7V3.5a1 1 0 0 1 2 0V8M11 8a1 1 0 0 1 2 0v3.5c0 2-1.5 3-3.5 3H8c-1 0-2-.6-2.8-1.5L3.5 11a1 1 0 0 1 1.5-1.3L6 10.5',
   inflate: 'M8 3.5a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9zM8 1v2M8 13v2M1 8h2M13 8h2',
+  measure: 'M2.5 10.5 10.5 2.5l3 3-8 8zM5 8l1.5 1.5M7 6l1.5 1.5M9 4l1.5 1.5',
 };
 
 export function icon(name: string): string {

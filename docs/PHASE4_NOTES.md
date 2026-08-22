@@ -41,3 +41,12 @@ Recolor / Fade / Inflate swipe of ~50 k splats: ~220–260 ms for the whole gest
 Smooth (Laplacian on neighbours — needs the 3D voxel grid per pass), depth-aware brushes
 (everything under the ring is hit regardless of depth — intentionally Photoshop-like),
 brushes on LoD layers preview only after commit (Spark renders its LoD copy).
+
+## Measure / scale-to-reference (same day)
+
+`sketch/MeasureTool.ts` (`M`): two picks on the active layer (`pickLayer` restricted to that
+layer, nearest-projected fallback), a live overlay line/label (re-projected every frame via
+the new Viewer `frame` event, so orbiting between clicks is fine), a popover prefilled with
+the measured distance; submitting pushes one `SetLayerTransform` — uniform scale about the
+first point (`scaleAboutWorldPoint`, unit-tested under the rotated root). Units are scene
+units shown as mm/cm/m.

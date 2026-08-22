@@ -96,6 +96,20 @@
       </div>
       <div id="toolbar" class="toolbar" aria-label="Object tools" hidden></div>
       <div id="hover-label" class="hover-label" hidden></div>
+      <form id="measure-popover" class="measure-popover" aria-label="Scale to reference" hidden>
+        <label
+          ><span>Real distance</span
+          ><input
+            name="distance"
+            type="number"
+            min="0.0001"
+            step="any"
+            aria-label="Real distance in metres"
+          /><span>m</span></label
+        >
+        <button type="submit" class="primary">Scale layer</button>
+        <button type="button">Cancel</button>
+      </form>
       <div id="drag-overlay" class="drag-overlay" hidden>
         <div><strong>Drop to open</strong><span>The current scene will be replaced</span></div>
       </div>

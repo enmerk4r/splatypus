@@ -138,7 +138,7 @@ export class SketchTool {
   private readonly onPointerLeave = (): void => this.options.overlay.hideCursor();
 
   private updateCursor(event: PointerEvent): void {
-    if (this.viewer.tool === 'select') return;
+    if (this.viewer.tool === 'select' || this.viewer.tool === 'measure') return;
     const rect = this.canvas.getBoundingClientRect();
     this.options.overlay.setCursor(
       event.clientX - rect.left,
@@ -171,7 +171,14 @@ export class SketchTool {
 
   private readonly onPointerDown = (event: PointerEvent): void => {
     this.updateCursor(event);
-    if (this.viewer.tool === 'select' || event.button !== 0 || event.altKey || this.session) return;
+    if (
+      this.viewer.tool === 'select' ||
+      this.viewer.tool === 'measure' ||
+      event.button !== 0 ||
+      event.altKey ||
+      this.session
+    )
+      return;
     if (this.viewer.cameraRig.mode !== 'orbit') {
       if (!this.flyWarningShown) {
         this.options.notify('Switch to orbit mode (Tab) before drawing.', 'warning');

@@ -12,6 +12,7 @@ import { GroupMapError } from './splats/groups';
 import { SketchSettingsStore } from './sketch/settings';
 import { SketchOverlay } from './sketch/SketchOverlay';
 import { SketchTool } from './sketch/SketchTool';
+import { MeasureTool } from './sketch/MeasureTool';
 import { createExportDialog } from './ui/exportDialog';
 import { createHoverLabel } from './ui/hoverLabel';
 import { Hud } from './ui/hud';
@@ -67,6 +68,11 @@ async function bootstrap(): Promise<void> {
     element<HTMLCanvasElement>('sketch-overlay'),
     viewer.canvasElement,
   );
+  const measureTool = new MeasureTool(viewer, {
+    overlay: sketchOverlay,
+    popover: element<HTMLFormElement>('measure-popover'),
+    notify: (message, level) => hud.toast(message, level),
+  });
   const sketchTool = new SketchTool(viewer, {
     settings: () => sketchSettings.snapshot(),
     brush: () => ({ strength: sketchSettings.strength, softEdge: sketchSettings.softEdge }),
@@ -186,7 +192,7 @@ async function bootstrap(): Promise<void> {
     openFile: () => openInput.click(),
     addFile: () => addInput.click(),
     exportFile: exportDialog.open,
-    cancelStroke: () => sketchTool.cancelStroke(),
+    cancelStroke: () => sketchTool.cancelStroke() || measureTool.reset(),
     adjustSketchSize: (factor) => sketchSettings.adjustRadius(factor),
     adjustSketchOpacity: (delta) => sketchSettings.adjustOpacity(delta),
     notify: (message, level) => hud.toast(message, level),
@@ -259,6 +265,7 @@ async function bootstrap(): Promise<void> {
       segmentation.dispose();
       crop.dispose();
       sketchTool.dispose();
+      measureTool.dispose();
       sketchOverlay.dispose();
       viewer.dispose();
     },

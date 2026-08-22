@@ -59,6 +59,7 @@ export function createToolbar(
       ${button('data-mode', 'select', 'Select (Q)', 'pick layers; drag the gumball to move')}
       ${button('data-mode', 'rotate', 'Rotate (E)', 'spin it in place')}
       ${button('data-mode', 'scale', 'Scale (R)', 'resize it uniformly')}
+      ${button('data-tool', 'measure', 'Measure / scale to reference (M)', 'pick two points on the active layer, type the real distance, the layer is scaled to match')}
     </div>
     <div class="toolbar-rule"></div>
     <div class="toolbar-group">
@@ -230,6 +231,7 @@ export function createToolbar(
       fade: 'fade',
       grab: 'grab',
       inflate: 'inflate',
+      measure: 'measure',
     };
     for (const toolButton of toolButtons)
       toolButton.setAttribute(
@@ -449,6 +451,7 @@ export function createToolbar(
     fade: 'fade',
     grab: 'grab',
     inflate: 'inflate',
+    measure: 'measure',
   };
   for (const toolButton of toolButtons)
     toolButton.addEventListener('click', () => {

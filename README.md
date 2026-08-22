@@ -121,6 +121,13 @@ shrinks), plus the **Eraser** (`X`). Strength and soft/hard edge are in the SKET
 scales the effect. Each gesture is one undo step; the view is locked while the mouse is down.
 Details: [docs/PHASE4_NOTES.md](docs/PHASE4_NOTES.md).
 
+## Measure / scale to reference
+
+Press `M` (ruler in the toolbar), click two points on the active layer — the live readout shows
+their distance — then type the real distance and **Scale layer**: the layer is scaled uniformly
+about the first point so the two points are that far apart (one undoable transform). Use it to
+bring phone scans, point clouds and imported objects to true size before sketching or measuring.
+
 ## Export
 
 Use **EXPORT** in the HUD or `Ctrl/Cmd+E`. Choose **Export Project** to write an editable `.splatypus` project containing the layer stack, transforms, visibility and lock state, live/deleted splats, segmentation groups, sketch strokes, selection, and camera/view state. Opening that file restores the editing workspace; undo/redo history starts empty.

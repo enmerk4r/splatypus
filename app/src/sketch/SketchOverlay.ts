@@ -7,6 +7,14 @@ export class SketchOverlay {
   private readonly context: CanvasRenderingContext2D;
   private cursor?: { x: number; y: number; radius: number };
   private stroke?: { colour: string; radius: number; opacity: number; points: number[] };
+  private measure?: {
+    ax: number;
+    ay: number;
+    bx: number;
+    by: number;
+    label: string;
+    fixed: boolean;
+  };
   private frame = 0;
 
   constructor(
@@ -45,6 +53,19 @@ export class SketchOverlay {
 
   endStroke(): void {
     this.stroke = undefined;
+    this.schedule();
+  }
+
+  /** A measurement line between two canvas-relative points with a label; undefined clears it. */
+  setMeasure(measure?: {
+    ax: number;
+    ay: number;
+    bx: number;
+    by: number;
+    label: string;
+    fixed: boolean;
+  }): void {
+    this.measure = measure;
     this.schedule();
   }
 
@@ -106,8 +127,58 @@ export class SketchOverlay {
       }
       ctx.restore();
     }
+    const measure = this.measure;
+    if (measure) {
+      ctx.save();
+      ctx.lineCap = 'round';
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+      ctx.beginPath();
+      ctx.moveTo(measure.ax, measure.ay);
+      ctx.lineTo(measure.bx, measure.by);
+      ctx.stroke();
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = measure.fixed ? '#b8f34a' : 'rgba(255,255,255,0.9)';
+      ctx.stroke();
+      for (const [x, y] of [
+        [measure.ax, measure.ay],
+        [measure.bx, measure.by],
+      ] as const) {
+        ctx.beginPath();
+        ctx.arc(x, y, 4, 0, Math.PI * 2);
+        ctx.fillStyle = measure.fixed ? '#b8f34a' : '#ffffff';
+        ctx.fill();
+      }
+      ctx.font = '600 12px SFMono-Regular, Consolas, monospace';
+      const width = ctx.measureText(measure.label).width + 12;
+      const lx = (measure.ax + measure.bx) / 2 - width / 2;
+      const ly = (measure.ay + measure.by) / 2 - 22;
+      ctx.fillStyle = 'rgba(15,18,17,0.9)';
+      ctx.fillRect(lx, ly, width, 18);
+      ctx.fillStyle = measure.fixed ? '#b8f34a' : '#ffffff';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(measure.label, lx + 6, ly + 9);
+      ctx.restore();
+    }
     const cursor = this.cursor;
-    if (cursor) {
+    if (cursor && cursor.radius <= 1) {
+      // Crosshair for picking tools.
+      ctx.save();
+      ctx.lineWidth = 1;
+      for (const [colour, offset] of [
+        ['rgba(0,0,0,0.6)', 1],
+        ['rgba(255,255,255,0.95)', 0],
+      ] as const) {
+        ctx.strokeStyle = colour;
+        ctx.beginPath();
+        ctx.moveTo(cursor.x - 10, cursor.y + offset);
+        ctx.lineTo(cursor.x + 10, cursor.y + offset);
+        ctx.moveTo(cursor.x + offset, cursor.y - 10);
+        ctx.lineTo(cursor.x + offset, cursor.y + 10);
+        ctx.stroke();
+      }
+      ctx.restore();
+    } else if (cursor) {
       ctx.save();
       ctx.beginPath();
       ctx.arc(cursor.x, cursor.y, Math.max(1, cursor.radius), 0, Math.PI * 2);
