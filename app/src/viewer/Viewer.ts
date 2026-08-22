@@ -11,6 +11,7 @@ import {
   Vector3,
   WebGLRenderer,
 } from 'three';
+import type { Object3D } from 'three';
 import { SparkRenderer } from '@sparkjsdev/spark';
 import { CameraRig } from './CameraRig';
 import type { AxisView, CameraMode } from './CameraRig';
@@ -39,6 +40,8 @@ export class Viewer extends EventTarget {
   private upAxisValue: UpAxis = 'y-down';
   private renderScale = 1;
   private lastFrame = performance.now();
+  /** Where the pointer went down, so an orbit drag is not mistaken for a click. */
+  private pointerDown?: { x: number; y: number; time: number };
 
   constructor(canvas: HTMLCanvasElement, frameCallback: (now: number) => void) {
     super();
@@ -78,6 +81,8 @@ export class Viewer extends EventTarget {
     window.addEventListener('resize', this.resize);
     document.addEventListener('visibilitychange', this.onVisibilityChange);
     canvas.addEventListener('dblclick', this.onDoubleClick);
+    canvas.addEventListener('pointerdown', this.onPointerDown);
+    canvas.addEventListener('pointerup', this.onPointerUp);
     this.resize();
     this.camera.position.set(2, 1.2, 2);
     this.camera.lookAt(0, 0, 0);
@@ -182,6 +187,25 @@ export class Viewer extends EventTarget {
     window.removeEventListener('resize', this.resize);
     document.removeEventListener('visibilitychange', this.onVisibilityChange);
     this.canvas.removeEventListener('dblclick', this.onDoubleClick);
+    this.canvas.removeEventListener('pointerdown', this.onPointerDown);
+    this.canvas.removeEventListener('pointerup', this.onPointerUp);
+  }
+
+  get activeCamera(): PerspectiveCamera {
+    return this.camera;
+  }
+
+  get domElement(): HTMLCanvasElement {
+    return this.canvas;
+  }
+
+  /** Adds a segment layer (or a gizmo) to the scene alongside the loaded document. */
+  attach(object: Object3D): void {
+    this.scene.add(object);
+  }
+
+  detach(object: Object3D): void {
+    this.scene.remove(object);
   }
 
   private applyOrientation(): void {
@@ -246,7 +270,27 @@ export class Viewer extends EventTarget {
   };
 
   private readonly onDoubleClick = (event: MouseEvent): void => {
-    if (!this.documentValue || this.cameraRig.mode !== 'orbit') return;
+    const point = this.pointAt(event);
+    if (point) this.cameraRig.retarget(point);
+  };
+
+  private readonly onPointerDown = (event: PointerEvent): void => {
+    this.pointerDown = { x: event.clientX, y: event.clientY, time: performance.now() };
+  };
+
+  private readonly onPointerUp = (event: PointerEvent): void => {
+    const down = this.pointerDown;
+    this.pointerDown = undefined;
+    if (!down || event.button !== 0) return;
+    // An orbit drag ends in a pointerup too; only a short, still press is a click.
+    const moved = Math.hypot(event.clientX - down.x, event.clientY - down.y);
+    if (moved > 4 || performance.now() - down.time > 500) return;
+    this.dispatchEvent(new CustomEvent('canvas-click', { detail: { event } }));
+  };
+
+  /** Raycaster through the pointer, or undefined when picking is not active. */
+  raycasterFor(event: MouseEvent): Raycaster | undefined {
+    if (!this.documentValue || this.cameraRig.mode !== 'orbit') return undefined;
     const rect = this.canvas.getBoundingClientRect();
     const pointer = new Vector2(
       ((event.clientX - rect.left) / rect.width) * 2 - 1,
@@ -254,10 +298,26 @@ export class Viewer extends EventTarget {
     );
     const raycaster = new Raycaster();
     raycaster.setFromCamera(pointer, this.camera);
+    return raycaster;
+  }
+
+  /**
+   * Surface point under the pointer. Spark's raycast walks the gaussians properly, but
+   * a fuzzy cloud can be missed entirely, so a screen-space nearest-centre search backs
+   * it up.
+   */
+  pointAt(event: MouseEvent): Vector3 | undefined {
+    const raycaster = this.raycasterFor(event);
+    if (!raycaster || !this.documentValue) return undefined;
     const hit = raycaster.intersectObject(this.documentValue.mesh, false)[0];
-    const point = hit?.point ?? this.findNearestProjectedPoint(pointer, 12, rect);
-    if (point) this.cameraRig.retarget(point);
-  };
+    if (hit) return hit.point;
+    const rect = this.canvas.getBoundingClientRect();
+    const pointer = new Vector2(
+      ((event.clientX - rect.left) / rect.width) * 2 - 1,
+      -((event.clientY - rect.top) / rect.height) * 2 + 1,
+    );
+    return this.findNearestProjectedPoint(pointer, 12, rect);
+  }
 
   private findNearestProjectedPoint(
     pointer: Vector2,
