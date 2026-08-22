@@ -1,4 +1,5 @@
 import { SplatMesh } from '@sparkjsdev/spark';
+import { normalizePlyHeaderInPlace } from './plyCompat';
 
 export type SplatSource =
   | { kind: 'file'; file: File }
@@ -84,7 +85,9 @@ export async function loadSplat(
       byteLength = bytes.byteLength;
       onProgress({ phase: 'parsing', loaded: byteLength, total: byteLength });
       await nextFrame();
-      mesh = new SplatMesh({ fileBytes: bytes, fileName: name, onLoad: () => undefined });
+      const fileBytes = new Uint8Array(bytes);
+      normalizePlyHeaderInPlace(fileBytes, name);
+      mesh = new SplatMesh({ fileBytes, fileName: name, onLoad: () => undefined });
     }
     await mesh.initialized;
     return { mesh, name, byteLength };

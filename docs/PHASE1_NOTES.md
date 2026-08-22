@@ -31,6 +31,7 @@ Vite 8.2.2 replaced the initially tested 7.1.3 because the latter produced high-
 - `onProgress` receives a browser `ProgressEvent`; `lengthComputable` controls determinate versus indeterminate progress.
 - Spark 2.x requires an explicit `SparkRenderer` in the scene. The viewer creates exactly one and disposes each replaced `SplatMesh`.
 - Spark 2.1.0 includes a fix that clears texture references during disposal. This is relevant to repeated reloads, but it does not replace the manual memory test below.
+- Spark's worker rejects the standard PLY `obj_info` metadata record even though its point-cloud parser otherwise supports the file. Local PLY loading rewrites only that eight-byte keyword to the same-length `comment ` keyword in memory, preserving the binary payload offset and contents.
 
 ## Samples and network measurements
 
@@ -69,6 +70,7 @@ FPS and browser load-to-render measurements could not be collected in this agent
 - GitHub Actions run [32587017700](https://github.com/enmerk4r/splatypus/actions/runs/32587017700) passed both the clean build and deploy jobs.
 - The live Pages index, relative JavaScript and CSS bundles, three-entry sample manifest, and `.nojekyll` each returned HTTP 200 after deployment.
 - GitHub Pages is configured with `build_type: workflow`, HTTPS enforcement, and the public URL `https://enmerk4r.github.io/splatypus/`.
+- The 103,747,188-byte `Matera_Cave_Museum_7M.ply` CloudCompare sample normalized one `obj_info` line without changing the payload hash; Spark then recognized and parsed all 6,916,463 x/y/z/r/g/b records.
 
 ## Known limitations
 
