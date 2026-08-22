@@ -69,6 +69,7 @@ async function bootstrap(): Promise<void> {
   );
   const sketchTool = new SketchTool(viewer, {
     settings: () => sketchSettings.snapshot(),
+    brush: () => ({ strength: sketchSettings.strength, softEdge: sketchSettings.softEdge }),
     colourCss: () => sketchSettings.colour,
     overlay: sketchOverlay,
     notify: (message, level) => hud.toast(message, level),

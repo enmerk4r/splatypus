@@ -46,6 +46,10 @@ export class SketchSettingsStore extends EventTarget {
   opacity = 1;
   pressure = true;
   placement: PlacementMode = 'surface';
+  /** Brush strength (recolor/fade/grab/inflate), 0.05..1. */
+  strength = 0.5;
+  /** Brushes fall off towards the ring edge (true) or act as a hard disc (false). */
+  softEdge = true;
 
   constructor() {
     super();
@@ -58,6 +62,17 @@ export class SketchSettingsStore extends EventTarget {
     this.radiusPx = numberSetting('radiusPx', DEFAULT_RADIUS_PX, MIN_RADIUS_PX, MAX_RADIUS_PX);
     this.opacity = numberSetting('opacity', 1, 0.05, 1);
     this.pressure = read('pressure') !== '0';
+    this.strength = numberSetting('strength', 0.5, 0.05, 1);
+    this.softEdge = read('softEdge') !== '0';
+  }
+
+  setStrength(value: number): void {
+    this.strength = Math.min(1, Math.max(0.05, value));
+    this.changed('strength', String(this.strength));
+  }
+  setSoftEdge(value: boolean): void {
+    this.softEdge = value;
+    this.changed('softEdge', value ? '1' : '0');
   }
 
   /** Settings for a stroke about to start. `radius` (world) is filled in by the tool from the first sample's depth. */

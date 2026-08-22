@@ -70,6 +70,18 @@ export function wireShortcuts(viewer: Viewer, actions: ShortcutActions): () => v
       case 'KeyX':
         if (viewer.cameraRig.mode === 'orbit') viewer.setTool('erase');
         break;
+      case 'KeyC':
+        if (viewer.cameraRig.mode === 'orbit') viewer.setTool('recolor');
+        break;
+      case 'KeyD':
+        if (viewer.cameraRig.mode === 'orbit') viewer.setTool('fade');
+        break;
+      case 'KeyV':
+        if (viewer.cameraRig.mode === 'orbit') viewer.setTool('grab');
+        break;
+      case 'KeyI':
+        if (viewer.cameraRig.mode === 'orbit') viewer.setTool('inflate');
+        break;
       case 'BracketLeft':
       case 'BracketRight': {
         event.preventDefault();

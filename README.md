@@ -112,6 +112,15 @@ it runs on the main thread (a second or two per 200 k splats). Tints and labels 
 layers rendered through the LoD tree (≥ 1.5 M splats), though selection and split still work.
 Integration background: [docs/SEGMENTATION_NOTES.md](docs/SEGMENTATION_NOTES.md).
 
+## Edit brushes
+
+Brushes edit the **active layer** under the same pixel-size ring as the pen: **Recolor** (`C`,
+tints towards the SKETCH colour), **Fade** (`D`, lowers opacity; Shift restores), **Grab** (`V`,
+drags the splats captured under the ring along the screen), **Inflate** (`I`, grows splats; Shift
+shrinks), plus the **Eraser** (`X`). Strength and soft/hard edge are in the SKETCH panel; pressure
+scales the effect. Each gesture is one undo step; the view is locked while the mouse is down.
+Details: [docs/PHASE4_NOTES.md](docs/PHASE4_NOTES.md).
+
 ## Export
 
 Use **EXPORT** in the HUD or `Ctrl/Cmd+E`. Choose **Export Project** to write an editable `.splatypus` project containing the layer stack, transforms, visibility and lock state, live/deleted splats, segmentation groups, sketch strokes, selection, and camera/view state. Opening that file restores the editing workspace; undo/redo history starts empty.

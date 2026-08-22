@@ -44,6 +44,13 @@ export function createToolbar(
       ${button('data-tool', 'eraser', 'Erase (X)', 'erase splats of the active layer under the brush')}
     </div>
     <div class="toolbar-rule"></div>
+    <div class="toolbar-group" role="group" aria-label="Brushes">
+      ${button('data-tool', 'recolor', 'Recolor (C)', 'tint the active layer towards the brush colour')}
+      ${button('data-tool', 'fade', 'Fade (D)', 'fade splats of the active layer (Shift restores)')}
+      ${button('data-tool', 'grab', 'Grab (V)', 'drag splats of the active layer along the screen')}
+      ${button('data-tool', 'inflate', 'Inflate (I)', 'grow splats of the active layer (Shift shrinks)')}
+    </div>
+    <div class="toolbar-rule"></div>
     <div class="toolbar-group">
       ${button('data-op', 'split', 'Split to layer', 'lift the selected group out of its layer')}
     </div>
@@ -219,6 +226,10 @@ export function createToolbar(
     const toolNames: Record<string, ToolMode> = {
       pen: 'sketch',
       eraser: 'erase',
+      recolor: 'recolor',
+      fade: 'fade',
+      grab: 'grab',
+      inflate: 'inflate',
     };
     for (const toolButton of toolButtons)
       toolButton.setAttribute(
@@ -431,7 +442,14 @@ export function createToolbar(
   document.addEventListener('pointerdown', onOutsideScale);
   renderSelectionMode();
 
-  const toolNames: Record<string, ToolMode> = { pen: 'sketch', eraser: 'erase' };
+  const toolNames: Record<string, ToolMode> = {
+    pen: 'sketch',
+    eraser: 'erase',
+    recolor: 'recolor',
+    fade: 'fade',
+    grab: 'grab',
+    inflate: 'inflate',
+  };
   for (const toolButton of toolButtons)
     toolButton.addEventListener('click', () => {
       const tool = toolNames[toolButton.dataset.tool ?? ''];

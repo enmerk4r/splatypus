@@ -40,6 +40,10 @@ export function createSketchPanel(
         <button type="button" data-placement="plane">Plane</button>
       </div>
       <label class="sketch-toggle"><input id="sketch-pressure" type="checkbox" /> Pressure controls size + opacity</label>
+      <div class="sketch-row"><label for="sketch-strength">Brush strength <output id="sketch-strength-value"></output></label>
+        <input id="sketch-strength" type="range" min="0.05" max="1" step="0.05" title="Recolor / Fade / Grab / Inflate strength per pass" />
+      </div>
+      <label class="sketch-toggle"><input id="sketch-soft" type="checkbox" /> Soft brush edge</label>
       <p class="sketch-status" id="sketch-status"></p>
       <p class="sketch-hint">size is in screen pixels (zoom to change world size) · left button draws · right/middle or Alt+drag to orbit · the view is locked while a stroke is drawn · the eraser (X) uses the same size and erases the active layer only</p>
     </div>`;
@@ -50,6 +54,9 @@ export function createSketchPanel(
   const opacity = pick<HTMLInputElement>('#sketch-opacity');
   const opacityValue = pick<HTMLOutputElement>('#sketch-opacity-value');
   const pressure = pick<HTMLInputElement>('#sketch-pressure');
+  const strength = pick<HTMLInputElement>('#sketch-strength');
+  const strengthValue = pick<HTMLOutputElement>('#sketch-strength-value');
+  const soft = pick<HTMLInputElement>('#sketch-soft');
   const status = pick<HTMLParagraphElement>('#sketch-status');
   const presetButtons = [...root.querySelectorAll<HTMLButtonElement>('[data-preset]')];
   const placementButtons = [...root.querySelectorAll<HTMLButtonElement>('[data-placement]')];
@@ -64,6 +71,9 @@ export function createSketchPanel(
     opacity.value = String(settings.opacity);
     opacityValue.value = `${Math.round(settings.opacity * 100)}%`;
     pressure.checked = settings.pressure;
+    strength.value = String(settings.strength);
+    strengthValue.value = `${Math.round(settings.strength * 100)}%`;
+    soft.checked = settings.softEdge;
     presetButtons.forEach((button) =>
       button.setAttribute('aria-pressed', String(button.dataset.preset === settings.preset)),
     );
@@ -92,6 +102,8 @@ export function createSketchPanel(
   size.addEventListener('input', () => settings.setRadiusPx(Math.exp(Number(size.value))));
   opacity.addEventListener('input', () => settings.setOpacity(Number(opacity.value)));
   pressure.addEventListener('change', () => settings.setPressure(pressure.checked));
+  strength.addEventListener('input', () => settings.setStrength(Number(strength.value)));
+  soft.addEventListener('change', () => settings.setSoftEdge(soft.checked));
 
   let observed = viewer.document;
   const observe = (): void => {

@@ -4,6 +4,7 @@ import { LockedLayerError } from '../model/history';
 import { firstStrokeCommand, resolveSketchTarget } from '../model/sketchCommands';
 import type { SketchTarget } from '../model/sketchCommands';
 import type { ToastLevel } from '../ui/hud';
+import { BRUSH_TOOLS } from '../viewer/Viewer';
 import type { Viewer } from '../viewer/Viewer';
 import { localiseStroke, makeWorldStamps } from './bakeStroke';
 import { DepthGrid } from './depthGrid';
@@ -12,6 +13,8 @@ import type { PlacementState } from './placement';
 import { PRESETS } from './presets';
 import { EraseBrush } from './EraseBrush';
 import type { SketchOverlay } from './SketchOverlay';
+import { SplatBrush } from './SplatBrush';
+import type { BrushKind, BrushSettings } from './SplatBrush';
 import { StrokePreview } from './StrokePreview';
 import { resample, resamplePressures, resampleVectors } from './stroke';
 import type { ScreenPoint, StrokeSettings } from './stroke';
@@ -40,10 +43,19 @@ interface EraseSession {
   brush: EraseBrush;
 }
 
-type Session = DrawSession | EraseSession;
+interface BrushSession {
+  kind: 'brush';
+  pointerId: number;
+  document: Document;
+  brush: SplatBrush;
+}
+
+type Session = DrawSession | EraseSession | BrushSession;
 
 export interface SketchToolOptions {
   settings: () => StrokeSettings;
+  /** Strength/soft-edge for the attribute brushes. */
+  brush: () => { strength: number; softEdge: boolean };
   /** CSS colour of the current brush, for the screen-space overlay. */
   colourCss: () => string;
   overlay: SketchOverlay;
@@ -175,6 +187,22 @@ export class SketchTool {
     } catch {
       // Synthetic pointers (tests/automation) have no capture; drawing still works.
     }
+    if (BRUSH_TOOLS.includes(this.viewer.tool)) {
+      const stroke = this.options.settings();
+      const brushSettings: BrushSettings = {
+        kind: this.viewer.tool as BrushKind,
+        radiusPx: stroke.radiusPx,
+        colour: stroke.colour,
+        inverse: event.shiftKey,
+        ...this.options.brush(),
+      };
+      const brush = SplatBrush.begin(this.viewer, document, brushSettings, this.options.notify);
+      if (!brush) return;
+      this.viewer.lockCamera(true);
+      this.session = { kind: 'brush', pointerId: event.pointerId, document, brush };
+      this.brushAt(event);
+      return;
+    }
     if (this.viewer.tool === 'erase') {
       const brush = EraseBrush.begin(
         this.viewer,
@@ -226,6 +254,7 @@ export class SketchTool {
     if (!session || event.pointerId !== session.pointerId) return;
     const samples = coalescedEvents(event);
     if (session.kind === 'erase') samples.forEach((sample) => this.eraseAt(sample));
+    else if (session.kind === 'brush') samples.forEach((sample) => this.brushAt(sample));
     else samples.forEach((sample) => this.acceptDraw(sample));
   };
 
@@ -234,6 +263,7 @@ export class SketchTool {
     if (!session || event.pointerId !== session.pointerId) return;
     if (event.type === 'pointerup') {
       if (session.kind === 'draw') this.acceptDraw(event);
+      else if (session.kind === 'brush') this.brushAt(event);
       else this.eraseAt(event);
     }
     this.session = undefined;
@@ -340,7 +370,18 @@ export class SketchTool {
     session.brush.moveTo(event.clientX - rect.left, event.clientY - rect.top);
   }
 
-  private finishErase(session: EraseSession): void {
+  private brushAt(event: PointerEvent): void {
+    const session = this.session;
+    if (session?.kind !== 'brush') return;
+    const rect = this.canvas.getBoundingClientRect();
+    session.brush.moveTo(
+      event.clientX - rect.left,
+      event.clientY - rect.top,
+      this.options.settings().pressure ? 0.4 + 0.6 * pointerPressure(event) : 1,
+    );
+  }
+
+  private finishErase(session: EraseSession | BrushSession): void {
     try {
       if (this.viewer.document === session.document) session.brush.finish();
       else session.brush.cancel();

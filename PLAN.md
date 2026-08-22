@@ -129,6 +129,7 @@ Phase 1 is the only hard gate; after that, phases 3–6 are largely parallelizab
 - **Done when:** a red line drawn on a wall stays on the wall from every angle and survives export.
 
 ### Phase 4 — Edit brushes
+*Done in `main` (Erase, Recolor, Fade, Grab, Inflate as screen-space brushes on the active layer, one undo step each): [`docs/PHASE4_NOTES.md`](docs/PHASE4_NOTES.md). Remaining: Smooth.*
 - Live `SplatEdit` sphere/capsule preview following the cursor; bake on pointer-up via voxel-grid query over the swept capsule.
 - **Erase** (soft → opacity, hard → dead), **Recolor** (`MULTIPLY | SET_RGB | ADD`, strength), **Fade**. Stretch: **Grab / Smooth / Inflate** (displace centers), **Scale**.
 - **Done when:** remove a floater and recolor a wall with undo.

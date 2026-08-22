@@ -50,6 +50,11 @@ const PATHS: Record<string, string> = {
   layers: 'M8 2 14 5.5 8 9 2 5.5ZM2 8.5l6 3.5 6-3.5M2 11.5 8 15l6-3.5',
   segment: 'M2 2h5v5H2zM9 2h5v5H9zM2 9h5v5H2zM9 9h5v5H9z',
   chevron: 'M4 6l4 4 4-4',
+  // Brushes
+  recolor: 'M3 13.5 1.5 12l4-4M9.5 3.5 12.5 6.5 6 13H3v-3zM11 2l3 3',
+  fade: 'M8 1.5a6.5 6.5 0 1 0 0 13zM8 1.5a6.5 6.5 0 0 1 0 13',
+  grab: 'M5 8V3.5a1 1 0 0 1 2 0V7M7 7V2.5a1 1 0 0 1 2 0V7M9 7V3.5a1 1 0 0 1 2 0V8M11 8a1 1 0 0 1 2 0v3.5c0 2-1.5 3-3.5 3H8c-1 0-2-.6-2.8-1.5L3.5 11a1 1 0 0 1 1.5-1.3L6 10.5',
+  inflate: 'M8 3.5a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9zM8 1v2M8 13v2M1 8h2M13 8h2',
 };
 
 export function icon(name: string): string {

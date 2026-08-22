@@ -20,7 +20,8 @@ import { CanvasInteraction } from './CanvasInteraction';
 
 export class WebGLUnavailableError extends Error {}
 export type UpAxis = 'y-down' | 'y-up' | 'z-up';
-export type ToolMode = 'select' | 'sketch' | 'erase';
+export type ToolMode = 'select' | 'sketch' | 'erase' | 'recolor' | 'fade' | 'grab' | 'inflate';
+export const BRUSH_TOOLS: readonly ToolMode[] = ['recolor', 'fade', 'grab', 'inflate'];
 
 export class Viewer extends EventTarget {
   readonly cameraRig: CameraRig;
