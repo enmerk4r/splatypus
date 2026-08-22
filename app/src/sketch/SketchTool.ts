@@ -10,8 +10,8 @@ import { DepthGrid } from './depthGrid';
 import { placePoint } from './placement';
 import type { PlacementState } from './placement';
 import { PRESETS } from './presets';
+import { EraseBrush } from './EraseBrush';
 import type { SketchOverlay } from './SketchOverlay';
-import { StrokeEraser } from './StrokeEraser';
 import { StrokePreview } from './StrokePreview';
 import { resample, resamplePressures, resampleVectors } from './stroke';
 import type { ScreenPoint, StrokeSettings } from './stroke';
@@ -37,7 +37,7 @@ interface EraseSession {
   kind: 'erase';
   pointerId: number;
   document: Document;
-  eraser: StrokeEraser;
+  brush: EraseBrush;
 }
 
 type Session = DrawSession | EraseSession;
@@ -98,6 +98,8 @@ export class SketchTool {
     if (session.kind === 'draw') {
       session.preview.dispose();
       if (session.target.isNew) session.target.layer.dispose();
+    } else {
+      session.brush.cancel();
     }
     this.options.overlay.endStroke();
     this.viewer.lockCamera(false);
@@ -129,7 +131,7 @@ export class SketchTool {
     this.options.overlay.setCursor(
       event.clientX - rect.left,
       event.clientY - rect.top,
-      this.viewer.tool === 'erase' ? 6 : this.options.settings().radiusPx,
+      this.options.settings().radiusPx,
     );
   }
 
@@ -174,13 +176,17 @@ export class SketchTool {
       // Synthetic pointers (tests/automation) have no capture; drawing still works.
     }
     if (this.viewer.tool === 'erase') {
-      this.session = {
-        kind: 'erase',
-        pointerId: event.pointerId,
+      const brush = EraseBrush.begin(
+        this.viewer,
         document,
-        eraser: new StrokeEraser(this.viewer, document, this.options.notify),
-      };
-      this.session.eraser.collect(event);
+        this.options.settings().radiusPx,
+        this.options.notify,
+      );
+      if (!brush) return;
+      // The screen index assumes a fixed camera for the whole gesture.
+      this.viewer.lockCamera(true);
+      this.session = { kind: 'erase', pointerId: event.pointerId, document, brush };
+      this.eraseAt(event);
       return;
     }
     const settings = this.options.settings();
@@ -219,7 +225,7 @@ export class SketchTool {
     const session = this.session;
     if (!session || event.pointerId !== session.pointerId) return;
     const samples = coalescedEvents(event);
-    if (session.kind === 'erase') samples.forEach((sample) => session.eraser.collect(sample));
+    if (session.kind === 'erase') samples.forEach((sample) => this.eraseAt(sample));
     else samples.forEach((sample) => this.acceptDraw(sample));
   };
 
@@ -228,7 +234,7 @@ export class SketchTool {
     if (!session || event.pointerId !== session.pointerId) return;
     if (event.type === 'pointerup') {
       if (session.kind === 'draw') this.acceptDraw(event);
-      else session.eraser.collect(event);
+      else this.eraseAt(event);
     }
     this.session = undefined;
     if (session.kind === 'draw') this.finishDraw(session);
@@ -327,12 +333,21 @@ export class SketchTool {
     }
   }
 
+  private eraseAt(event: PointerEvent): void {
+    const session = this.session;
+    if (session?.kind !== 'erase') return;
+    const rect = this.canvas.getBoundingClientRect();
+    session.brush.moveTo(event.clientX - rect.left, event.clientY - rect.top);
+  }
+
   private finishErase(session: EraseSession): void {
-    if (this.viewer.document !== session.document) return;
     try {
-      session.eraser.finish();
+      if (this.viewer.document === session.document) session.brush.finish();
+      else session.brush.cancel();
     } catch (error) {
       this.report(error);
+    } finally {
+      this.viewer.lockCamera(false);
     }
   }
 

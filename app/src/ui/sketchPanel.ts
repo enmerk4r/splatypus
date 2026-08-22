@@ -41,7 +41,7 @@ export function createSketchPanel(
       </div>
       <label class="sketch-toggle"><input id="sketch-pressure" type="checkbox" /> Pressure controls size + opacity</label>
       <p class="sketch-status" id="sketch-status"></p>
-      <p class="sketch-hint">size is in screen pixels (zoom to change world size) · left button draws · right/middle or Alt+drag to orbit · the view is locked while a stroke is drawn</p>
+      <p class="sketch-hint">size is in screen pixels (zoom to change world size) · left button draws · right/middle or Alt+drag to orbit · the view is locked while a stroke is drawn · the eraser (X) uses the same size and erases the active layer only</p>
     </div>`;
   const pick = <T extends HTMLElement>(selector: string): T => root.querySelector<T>(selector)!;
   const colour = pick<HTMLInputElement>('#sketch-colour');

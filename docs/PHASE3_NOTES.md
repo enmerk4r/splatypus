@@ -66,3 +66,15 @@ defaults of 2 mm / 0 % opacity. Causes and fixes:
 
 Measured (Chrome, RTX 5070 Ti): butterfly stroke — pointer-down 19 ms, 60 moves 4 ms,
 commit 16 ms; Matera (2.3 M) — 70 ms / 7 ms / 142 ms.
+
+### Eraser (same day, Claude)
+
+The stroke eraser (pick a whole sketch stroke via raycast) was slow and only touched
+sketch layers. Replaced by a Photoshop-style brush (`sketch/EraseBrush.ts`): it erases
+every splat of the **active layer** (falls back to the only layer) whose projected centre
+passes under the brush circle — sketch or scan alike. At pointer-down the layer's live
+centres are projected once into a 16 px bucket grid (20 ms for 177 k splats), each pointer
+segment sweeps only the cells it crosses, erased splats vanish live (packed opacity → 0),
+and release pushes one `SetSplatsAlive` labelled "Erase N splats" (undoable). The view is
+locked during the gesture. Brush size is the SKETCH size (pixels, `[`/`]`). `StrokeEraser`
+was removed; the `EraseStrokes` command stays available for stroke-level erasing by id.

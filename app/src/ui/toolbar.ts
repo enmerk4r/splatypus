@@ -44,7 +44,7 @@ export function createToolbar(
     <div class="toolbar-rule"></div>
     <div class="toolbar-group" role="group" aria-label="Sketch tools">
       ${button('data-tool', 'pen', 'Sketch (S)', 'draw gaussian strokes')}
-      ${button('data-tool', 'eraser', 'Erase stroke (X)', 'remove whole sketch strokes')}
+      ${button('data-tool', 'eraser', 'Erase (X)', 'erase splats of the active layer under the brush')}
     </div>
     <div class="toolbar-rule"></div>
     <div class="toolbar-group">

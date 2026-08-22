@@ -43,9 +43,10 @@ export class SetSplatsAlive implements Command {
     private readonly layerId: string,
     indices: Uint32Array,
     private readonly alive: boolean,
+    label?: string,
   ) {
     this.indices = indices.slice();
-    this.label = `${alive ? 'Restore' : 'Hide'} ${indices.length.toLocaleString()} splats`;
+    this.label = label ?? `${alive ? 'Restore' : 'Hide'} ${indices.length.toLocaleString()} splats`;
   }
   private layer(): Layer {
     const layer = this.document.getLayer(this.layerId);
