@@ -1,5 +1,6 @@
 import { targetSketchLayer } from '../model/sketchCommands';
 import type { PresetName } from '../sketch/presets';
+import { MAX_RADIUS_PX, MIN_RADIUS_PX } from '../sketch/settings';
 import type { SketchSettingsStore } from '../sketch/settings';
 import type { PlacementMode } from '../sketch/stroke';
 import type { Viewer } from '../viewer/Viewer';
@@ -7,8 +8,8 @@ import { createPanelShell } from './collapse';
 
 const SWATCHES = ['#ff3b30', '#b8f34a', '#ffffff', '#35d0ff', '#ffd60a', '#ff4fd8'];
 
-function sizeLabel(metres: number): string {
-  return metres < 0.01 ? `${Math.round(metres * 1000)} mm` : `${(metres * 100).toFixed(1)} cm`;
+function sizeLabel(px: number): string {
+  return `${Math.round(px)} px`;
 }
 
 export function createSketchPanel(
@@ -28,7 +29,7 @@ export function createSketchPanel(
         </div>
       </div>
       <div class="sketch-row"><label for="sketch-size">Size <output id="sketch-size-value"></output></label>
-        <input id="sketch-size" type="range" min="${Math.log(0.002)}" max="${Math.log(0.5)}" step="0.01" />
+        <input id="sketch-size" type="range" min="${Math.log(MIN_RADIUS_PX)}" max="${Math.log(MAX_RADIUS_PX)}" step="0.01" title="Brush size in screen pixels — zoom in for fine detail, out for thick marks" />
       </div>
       <div class="sketch-row"><label for="sketch-opacity">Opacity <output id="sketch-opacity-value"></output></label>
         <input id="sketch-opacity" type="range" min="0" max="1" step="0.01" />
@@ -40,7 +41,7 @@ export function createSketchPanel(
       </div>
       <label class="sketch-toggle"><input id="sketch-pressure" type="checkbox" /> Pressure controls size + opacity</label>
       <p class="sketch-status" id="sketch-status"></p>
-      <p class="sketch-hint">draw with the left button · right/middle or Alt+drag to orbit</p>
+      <p class="sketch-hint">size is in screen pixels (zoom to change world size) · left button draws · right/middle or Alt+drag to orbit · the view is locked while a stroke is drawn</p>
     </div>`;
   const pick = <T extends HTMLElement>(selector: string): T => root.querySelector<T>(selector)!;
   const colour = pick<HTMLInputElement>('#sketch-colour');
@@ -58,8 +59,8 @@ export function createSketchPanel(
     const document = viewer.document;
     root.hidden = !document || document.layers.length === 0;
     colour.value = settings.colour;
-    size.value = String(Math.log(settings.radius));
-    sizeValue.value = sizeLabel(settings.radius);
+    size.value = String(Math.log(settings.radiusPx));
+    sizeValue.value = sizeLabel(settings.radiusPx);
     opacity.value = String(settings.opacity);
     opacityValue.value = `${Math.round(settings.opacity * 100)}%`;
     pressure.checked = settings.pressure;
@@ -88,7 +89,7 @@ export function createSketchPanel(
     button.addEventListener('click', () => settings.setColour(button.dataset.colour!)),
   );
   colour.addEventListener('input', () => settings.setColour(colour.value));
-  size.addEventListener('input', () => settings.setRadius(Math.exp(Number(size.value))));
+  size.addEventListener('input', () => settings.setRadiusPx(Math.exp(Number(size.value))));
   opacity.addEventListener('input', () => settings.setOpacity(Number(opacity.value)));
   pressure.addEventListener('change', () => settings.setPressure(pressure.checked));
 

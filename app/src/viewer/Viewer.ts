@@ -37,6 +37,7 @@ export class Viewer extends EventTarget {
   private upAxisValue: UpAxis = 'y-down';
   private renderScale = 1;
   private toolValue: ToolMode = 'select';
+  private cameraLockedValue = false;
   private lastFrame = performance.now();
   /** While any guard returns true (e.g. a gizmo is in use) canvas clicks/hovers are ignored. */
   private readonly interactionGuards: (() => boolean)[] = [];
@@ -100,6 +101,18 @@ export class Viewer extends EventTarget {
   }
   get tool(): ToolMode {
     return this.toolValue;
+  }
+
+  /** While locked (a stroke is being drawn) orbit controls and view shortcuts are ignored. */
+  get cameraLocked(): boolean {
+    return this.cameraLockedValue;
+  }
+
+  lockCamera(locked: boolean): void {
+    if (locked === this.cameraLockedValue) return;
+    this.cameraLockedValue = locked;
+    this.cameraRig.controls.enabled = !locked && this.cameraRig.mode === 'orbit';
+    this.dispatchEvent(new Event('camera-lock-changed'));
   }
 
   setTool(tool: ToolMode): void {

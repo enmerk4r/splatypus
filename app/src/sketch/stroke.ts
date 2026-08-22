@@ -5,6 +5,9 @@ export type PlacementMode = 'surface' | 'depth' | 'plane';
 export interface StrokeSettings {
   preset: PresetName;
   colour: [number, number, number];
+  /** Brush radius in screen pixels (what the user sets). */
+  radiusPx: number;
+  /** World radius at the stroke's first sample; per-sample radii follow depth. */
   radius: number;
   opacity: number;
   pressure: boolean;

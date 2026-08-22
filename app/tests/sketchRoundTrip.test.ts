@@ -58,6 +58,7 @@ describe('sketch coordinate and export round trip', () => {
     const settings: StrokeSettings = {
       preset: 'ink',
       colour: [0.8, 0.1, 0.2],
+      radiusPx: 10,
       radius: 0.05,
       opacity: 1,
       pressure: true,
@@ -115,6 +116,7 @@ describe('sketch coordinate and export round trip', () => {
     const settings: StrokeSettings = {
       preset: 'tube',
       colour: [1, 0, 0],
+      radiusPx: 10,
       radius: 0.1,
       opacity: 1,
       pressure: false,

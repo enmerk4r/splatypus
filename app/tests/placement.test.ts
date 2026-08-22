@@ -19,20 +19,20 @@ function fixture(): { viewer: Viewer; state: PlacementState } {
   } as unknown as Viewer;
   return {
     viewer,
-    state: { radius: 0.1, viewDir: camera.getWorldDirection(new Vector3()) },
+    state: { radiusPx: 10, viewDir: camera.getWorldDirection(new Vector3()) },
   };
 }
 
 describe('stroke placement', () => {
   it('intersects the world ground plane', () => {
     const { viewer, state } = fixture();
-    const point = placePoint(viewer, { clientX: 50, clientY: 50 }, 'plane', state);
+    const point = placePoint(viewer, { clientX: 50, clientY: 50 }, 'plane', state)?.point;
     expect(point?.distanceTo(new Vector3(0, 0, 0))).toBeLessThan(1e-6);
   });
 
   it('uses orbit-target distance when depth lock begins in the void', () => {
     const { viewer, state } = fixture();
-    const point = placePoint(viewer, { clientX: 50, clientY: 50 }, 'depth', state);
+    const point = placePoint(viewer, { clientX: 50, clientY: 50 }, 'depth', state)?.point;
     expect(point?.distanceTo(new Vector3(0, 0, 0))).toBeLessThan(1e-6);
     expect(state.first?.distanceTo(point!)).toBeLessThan(1e-6);
   });
@@ -41,7 +41,7 @@ describe('stroke placement', () => {
     const { viewer, state } = fixture();
     const previous = new Vector3(0, 0, 0);
     state.previous = previous.clone();
-    const point = placePoint(viewer, { clientX: 50, clientY: 50 }, 'surface', state);
+    const point = placePoint(viewer, { clientX: 50, clientY: 50 }, 'surface', state)?.point;
     expect(point?.distanceTo(previous)).toBeLessThan(1e-6);
   });
 });

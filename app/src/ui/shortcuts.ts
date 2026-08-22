@@ -46,6 +46,14 @@ export function wireShortcuts(viewer: Viewer, actions: ShortcutActions): () => v
       return;
     }
     if (event.altKey) return;
+    // A stroke in progress owns the view: no reframing/view switches until it is committed.
+    if (
+      viewer.cameraLocked &&
+      ['KeyF', 'Tab', 'Digit1', 'Numpad1', 'Digit3', 'Numpad3', 'Digit7', 'Numpad7'].includes(
+        event.code,
+      )
+    )
+      return;
     switch (event.code) {
       case 'KeyF':
         viewer.frame();

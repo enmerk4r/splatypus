@@ -50,8 +50,15 @@ select:focus-visible {
   touch-action: none;
 }
 
+.sketch-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
 #viewer.tool-crosshair {
-  cursor: crosshair;
+  cursor: none;
 }
 
 .empty-state {

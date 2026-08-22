@@ -37,3 +37,32 @@ Browser discovery returned no in-app target in this implementation session. The 
 
 - Standard 3DGS PLY contains gaussian data but no vector-stroke schema. Export/re-import preserves the visible strokes, while stroke-level erase metadata remains session-local. Project persistence is outside Phase 3.
 - As in Phase 2, rotations are not applied to imported SH coefficients. Sketches have no SH, so this does not affect their own colour.
+
+## Review addendum (2026-08-22, Claude)
+
+Codex's Phase 3 was functionally complete (50 tests, lint/build green) but unusable in
+practice: no visible feedback until the stroke committed, multi-second lag, and brush
+defaults of 2 mm / 0 % opacity. Causes and fixes:
+
+- **Defaults**: `numberSetting` treated an unset key as `0` (`Number(null)`), so a fresh
+  browser got the minimum size and zero opacity. Unset now falls back properly; opacity is
+  clamped to ≥ 5 %.
+- **Lag**: surface placement ran a Spark raycast (plus the 200 k-sample projected-centre
+  fallback) for **every coalesced pointer event** — seconds per stroke on a scan. Placement
+  now uses a screen-space **depth image** (`sketch/depthGrid.ts`): all live splat centres of
+  visible layers are projected once at pointer-down (70 ms for the 2.3 M Matera cloud, ~15 ms
+  for the butterfly; cached while camera and scene are unchanged) and each sample is an
+  array lookup. No raycasts while drawing: 80 pointer moves cost ~7 ms.
+- **Feedback**: a 2D overlay canvas (`sketch/SketchOverlay.ts`) draws the stroke under the
+  pointer immediately (width = brush diameter, colour/opacity of the brush) plus the brush
+  cursor ring; the cheap 3D preview is kept. The view is **locked while a stroke is drawn**
+  (`Viewer.lockCamera`: orbit controls and F/1/3/7/Tab ignored) and released after commit.
+- **Brush size is in screen pixels** (1–80 px, default 10): the cursor ring keeps its screen
+  size while zooming, and the world radius is derived per sample from its depth
+  (`radius = px × σ-factor × worldPerPixel(depth)`, σ-factor 0.5 so a gaussian looks as thick
+  as the ring). Zoom in for fine marks, out for thick ones. `Stroke.settings` keeps both
+  `radiusPx` and the world `radius` at the first sample (used for spacing).
+- Synthetic pointers (automation) lack pointer capture; capture/release are now guarded.
+
+Measured (Chrome, RTX 5070 Ti): butterfly stroke — pointer-down 19 ms, 60 moves 4 ms,
+commit 16 ms; Matera (2.3 M) — 70 ms / 7 ms / 142 ms.

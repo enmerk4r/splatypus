@@ -6,9 +6,11 @@ import type { SketchTarget } from '../model/sketchCommands';
 import type { ToastLevel } from '../ui/hud';
 import type { Viewer } from '../viewer/Viewer';
 import { localiseStroke, makeWorldStamps } from './bakeStroke';
+import { DepthGrid } from './depthGrid';
 import { placePoint } from './placement';
 import type { PlacementState } from './placement';
 import { PRESETS } from './presets';
+import type { SketchOverlay } from './SketchOverlay';
 import { StrokeEraser } from './StrokeEraser';
 import { StrokePreview } from './StrokePreview';
 import { resample, resamplePressures, resampleVectors } from './stroke';
@@ -21,13 +23,13 @@ interface DrawSession {
   target: SketchTarget;
   id: string;
   settings: StrokeSettings;
-  viewDir: Vector3;
   placement: PlacementState;
   preview: StrokePreview;
   ema?: ScreenPoint;
   accepted?: ScreenPoint;
   points: number[];
   pressures: number[];
+  radii: number[];
   views: number[];
 }
 
@@ -42,6 +44,9 @@ type Session = DrawSession | EraseSession;
 
 export interface SketchToolOptions {
   settings: () => StrokeSettings;
+  /** CSS colour of the current brush, for the screen-space overlay. */
+  colourCss: () => string;
+  overlay: SketchOverlay;
   notify: (message: string, level?: ToastLevel) => void;
 }
 
@@ -55,10 +60,18 @@ function coalescedEvents(event: PointerEvent): PointerEvent[] {
   return coalesced.length > 0 ? coalesced : [event];
 }
 
+/**
+ * Sketch/erase pointer tool. While a stroke is drawn the camera is locked and the stroke is
+ * shown immediately in screen space (overlay) plus a cheap 3D preview; placement uses a
+ * depth image built once at pointer-down, so no per-sample raycasts. On release the stroke
+ * is resampled, stamped, committed as an undoable command, and the camera unlocks.
+ */
 export class SketchTool {
   private readonly canvas: HTMLCanvasElement;
   private session?: Session;
   private flyWarningShown = false;
+  /** Depth image reused across strokes while the camera and scene stay put. */
+  private depthCache?: { key: string; grid: DepthGrid };
 
   constructor(
     private readonly viewer: Viewer,
@@ -70,6 +83,7 @@ export class SketchTool {
     this.canvas.addEventListener('pointerup', this.onPointerEnd);
     this.canvas.addEventListener('pointercancel', this.onPointerEnd);
     this.canvas.addEventListener('lostpointercapture', this.onPointerEnd);
+    this.canvas.addEventListener('pointerleave', this.onPointerLeave);
     this.viewer.addEventListener('tool-changed', this.onToolChanged);
   }
 
@@ -85,6 +99,8 @@ export class SketchTool {
       session.preview.dispose();
       if (session.target.isNew) session.target.layer.dispose();
     }
+    this.options.overlay.endStroke();
+    this.viewer.lockCamera(false);
     this.release(session.pointerId);
     return true;
   }
@@ -96,12 +112,51 @@ export class SketchTool {
     this.canvas.removeEventListener('pointerup', this.onPointerEnd);
     this.canvas.removeEventListener('pointercancel', this.onPointerEnd);
     this.canvas.removeEventListener('lostpointercapture', this.onPointerEnd);
+    this.canvas.removeEventListener('pointerleave', this.onPointerLeave);
     this.viewer.removeEventListener('tool-changed', this.onToolChanged);
   }
 
-  private readonly onToolChanged = (): void => void this.cancelStroke();
+  private readonly onToolChanged = (): void => {
+    this.cancelStroke();
+    if (this.viewer.tool === 'select') this.options.overlay.hideCursor();
+  };
+
+  private readonly onPointerLeave = (): void => this.options.overlay.hideCursor();
+
+  private updateCursor(event: PointerEvent): void {
+    if (this.viewer.tool === 'select') return;
+    const rect = this.canvas.getBoundingClientRect();
+    this.options.overlay.setCursor(
+      event.clientX - rect.left,
+      event.clientY - rect.top,
+      this.viewer.tool === 'erase' ? 6 : this.options.settings().radiusPx,
+    );
+  }
+
+  private depthGridFor(document: Document): DepthGrid {
+    const rect = this.canvas.getBoundingClientRect();
+    const camera = this.viewer.camera;
+    camera.updateMatrixWorld(true);
+    const key = [
+      ...camera.matrixWorld.elements.map((value) => value.toFixed(5)),
+      camera.fov,
+      rect.width,
+      rect.height,
+      document.layers
+        .map((layer) => `${layer.id}:${layer.visible}:${layer.store.liveCount()}`)
+        .join(','),
+    ].join('|');
+    if (this.depthCache?.key !== key) {
+      const started = performance.now();
+      const grid = DepthGrid.build(document, camera, rect.width, rect.height);
+      this.depthCache = { key, grid };
+      console.info(`Sketch depth image built in ${(performance.now() - started).toFixed(0)} ms`);
+    }
+    return this.depthCache.grid;
+  }
 
   private readonly onPointerDown = (event: PointerEvent): void => {
+    this.updateCursor(event);
     if (this.viewer.tool === 'select' || event.button !== 0 || event.altKey || this.session) return;
     if (this.viewer.cameraRig.mode !== 'orbit') {
       if (!this.flyWarningShown) {
@@ -113,7 +168,11 @@ export class SketchTool {
     const document = this.viewer.document;
     if (!document) return;
     this.flyWarningShown = false;
-    this.canvas.setPointerCapture(event.pointerId);
+    try {
+      this.canvas.setPointerCapture(event.pointerId);
+    } catch {
+      // Synthetic pointers (tests/automation) have no capture; drawing still works.
+    }
     if (this.viewer.tool === 'erase') {
       this.session = {
         kind: 'erase',
@@ -127,6 +186,8 @@ export class SketchTool {
     const settings = this.options.settings();
     const viewDir = this.viewer.camera.getWorldDirection(new Vector3());
     const id = crypto.randomUUID();
+    // Lock the view for the whole stroke: placement, preview and the overlay all assume a fixed camera.
+    this.viewer.lockCamera(true);
     this.session = {
       kind: 'draw',
       pointerId: event.pointerId,
@@ -134,17 +195,27 @@ export class SketchTool {
       target: resolveSketchTarget(document),
       id,
       settings,
-      viewDir,
-      placement: { radius: settings.radius, viewDir: viewDir.clone() },
+      placement: {
+        radiusPx: settings.radiusPx,
+        viewDir: viewDir.clone(),
+        ...(settings.placement === 'surface' ? { depthGrid: this.depthGridFor(document) } : {}),
+      },
       preview: new StrokePreview(this.viewer, settings, id),
       points: [],
       pressures: [],
+      radii: [],
       views: [],
     };
+    this.options.overlay.beginStroke(
+      this.options.colourCss(),
+      settings.radiusPx,
+      PRESETS[settings.preset].opacity * settings.opacity,
+    );
     this.acceptDraw(event, true);
   };
 
   private readonly onPointerMove = (event: PointerEvent): void => {
+    this.updateCursor(event);
     const session = this.session;
     if (!session || event.pointerId !== session.pointerId) return;
     const samples = coalescedEvents(event);
@@ -184,38 +255,48 @@ export class SketchTool {
       Math.hypot(point.x - session.accepted.x, point.y - session.accepted.y) < 1.5
     )
       return;
-    const world = placePoint(
+    const placed = placePoint(
       this.viewer,
       { clientX: point.x, clientY: point.y },
       session.settings.placement,
       session.placement,
     );
-    if (!world) return;
+    if (!placed) return;
     session.accepted = point;
-    const viewDir = this.viewer.camera.getWorldDirection(new Vector3());
-    session.preview.appendPoint(world, point.pressure, viewDir);
-    session.points.push(world.x, world.y, world.z);
+    // The world radius of the first sample defines the stroke's spacing and stored size.
+    if (session.points.length === 0) session.settings.radius = placed.radius;
+    const rect = this.canvas.getBoundingClientRect();
+    this.options.overlay.addPoint(
+      point.x - rect.left,
+      point.y - rect.top,
+      session.settings.pressure ? 0.4 + 0.6 * point.pressure : 1,
+    );
+    const viewDir = session.placement.viewDir;
+    session.preview.appendPoint(placed.point, point.pressure, viewDir, placed.radius);
+    session.points.push(placed.point.x, placed.point.y, placed.point.z);
     session.pressures.push(point.pressure);
+    session.radii.push(placed.radius);
     session.views.push(viewDir.x, viewDir.y, viewDir.z);
   }
 
   private finishDraw(session: DrawSession): void {
     session.preview.dispose();
-    if (this.viewer.document !== session.document || session.points.length === 0) {
-      if (session.target.isNew) session.target.layer.dispose();
-      return;
-    }
+    this.options.overlay.endStroke();
     try {
+      if (this.viewer.document !== session.document || session.points.length === 0) {
+        if (session.target.isNew) session.target.layer.dispose();
+        return;
+      }
       const path = new Float32Array(session.points);
-      const sampled = resample(
-        path,
-        PRESETS[session.settings.preset].spacing * session.settings.radius,
-      );
+      const spacing =
+        PRESETS[session.settings.preset].spacing * Math.max(session.settings.radius, 1e-6);
+      const sampled = resample(path, spacing);
       const pressures = resamplePressures(
         path,
         new Float32Array(session.pressures),
         sampled.points,
       );
+      const radii = resamplePressures(path, new Float32Array(session.radii), sampled.points);
       const viewDirs = resampleVectors(path, new Float32Array(session.views), sampled.points);
       const stamps = makeWorldStamps(
         sampled.points,
@@ -224,6 +305,7 @@ export class SketchTool {
         session.settings,
         viewDirs,
         session.id,
+        radii,
       );
       const baked = localiseStroke(
         session.document,
@@ -240,6 +322,8 @@ export class SketchTool {
       if (session.target.isNew && !session.document.getLayer(session.target.layer.id))
         session.target.layer.dispose();
       this.report(error);
+    } finally {
+      this.viewer.lockCamera(false);
     }
   }
 
@@ -253,7 +337,11 @@ export class SketchTool {
   }
 
   private release(pointerId: number): void {
-    if (this.canvas.hasPointerCapture(pointerId)) this.canvas.releasePointerCapture(pointerId);
+    try {
+      if (this.canvas.hasPointerCapture(pointerId)) this.canvas.releasePointerCapture(pointerId);
+    } catch {
+      // Synthetic pointers (tests/automation) have no capture.
+    }
   }
 
   private report(error: unknown): void {

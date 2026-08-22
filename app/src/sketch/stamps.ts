@@ -75,14 +75,15 @@ function tuple(quaternion: Quaternion): [number, number, number, number] {
 }
 
 export function stampsFor(
-  sample: { p: Vector3; t: Vector3; pressure: number },
+  sample: { p: Vector3; t: Vector3; pressure: number; radius?: number },
   view: { dir: Vector3 },
   settings: StrokeSettings,
   preset: Preset,
   rng: RandomSource,
 ): Stamp[] {
   const pressure = Math.min(1, Math.max(0, sample.pressure));
-  const radius = settings.radius * (settings.pressure ? 0.4 + 0.6 * pressure : 1);
+  const base = sample.radius ?? settings.radius;
+  const radius = base * (settings.pressure ? 0.4 + 0.6 * pressure : 1);
   const opacity =
     preset.opacity * settings.opacity * (settings.pressure ? 0.6 + 0.4 * pressure : 1);
   const scatter = preset.scatter;

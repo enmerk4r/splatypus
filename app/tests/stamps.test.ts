@@ -10,6 +10,7 @@ import type { StrokeSettings } from '../src/sketch/stroke';
 const settings: StrokeSettings = {
   preset: 'ink',
   colour: [1, 0, 0],
+  radiusPx: 10,
   radius: 0.1,
   opacity: 1,
   pressure: true,

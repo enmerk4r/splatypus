@@ -34,6 +34,7 @@ function stroke(id: string, count: number): Stroke {
     settings: {
       preset: 'ink',
       colour: [1, 0, 0],
+      radiusPx: 10,
       radius: 0.02,
       opacity: 1,
       pressure: true,

@@ -14,6 +14,7 @@ export function makeWorldStamps(
   settings: StrokeSettings,
   viewDirs: Vector3 | Float32Array,
   strokeId: string,
+  radii?: Float32Array,
 ): Stamp[] {
   const stamps: Stamp[] = [];
   const rng = mulberry32(hashStrokeId(strokeId));
@@ -29,6 +30,7 @@ export function makeWorldStamps(
           p: new Vector3().fromArray(points, index * 3),
           t: new Vector3().fromArray(tangents, index * 3),
           pressure: pressures[index] ?? 1,
+          ...(radii ? { radius: radii[index] ?? settings.radius } : {}),
         },
         { dir: viewDir },
         settings,

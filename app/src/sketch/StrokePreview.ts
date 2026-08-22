@@ -13,6 +13,7 @@ export class StrokePreview {
   private count = 0;
   private lastPoint?: Vector3;
   private lastPressure = 1;
+  private lastRadius = 0;
   private distanceSinceStamp = 0;
   private readonly rng: () => number;
 
@@ -32,13 +33,14 @@ export class StrokePreview {
     return this.count;
   }
 
-  appendPoint(point: Vector3, pressure: number, viewDir: Vector3): void {
+  /** @param radius world-space brush radius at this sample (derived from its depth). */
+  appendPoint(point: Vector3, pressure: number, viewDir: Vector3, radius: number): void {
     const preset = PRESETS[this.settings.preset];
     const from = this.lastPoint;
     if (!from) {
       this.append(
         stampsFor(
-          { p: point, t: new Vector3(1, 0, 0), pressure },
+          { p: point, t: new Vector3(1, 0, 0), pressure, radius },
           { dir: viewDir },
           this.settings,
           preset,
@@ -47,13 +49,14 @@ export class StrokePreview {
       );
       this.lastPoint = point.clone();
       this.lastPressure = pressure;
+      this.lastRadius = radius;
       return;
     }
     const delta = point.clone().sub(from);
     const length = delta.length();
     if (length <= 1e-12) return;
     const tangent = delta.clone().divideScalar(length);
-    const spacing = preset.spacing * this.settings.radius;
+    const spacing = preset.spacing * Math.max(radius, 1e-6);
     let along = 0;
     let needed = spacing - this.distanceSinceStamp;
     while (along + needed <= length) {
@@ -65,6 +68,7 @@ export class StrokePreview {
             p: from.clone().addScaledVector(tangent, along),
             t: tangent,
             pressure: this.lastPressure + (pressure - this.lastPressure) * t,
+            radius: this.lastRadius + (radius - this.lastRadius) * t,
           },
           { dir: viewDir },
           this.settings,
@@ -78,6 +82,7 @@ export class StrokePreview {
     this.distanceSinceStamp += length - along;
     this.lastPoint = point.clone();
     this.lastPressure = pressure;
+    this.lastRadius = radius;
   }
 
   private append(stamps: readonly Stamp[]): void {

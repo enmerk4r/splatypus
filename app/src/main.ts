@@ -10,6 +10,7 @@ import { CropBox } from './select/CropBox';
 import { Segmentation } from './select/Segmentation';
 import { GroupMapError } from './splats/groups';
 import { SketchSettingsStore } from './sketch/settings';
+import { SketchOverlay } from './sketch/SketchOverlay';
 import { SketchTool } from './sketch/SketchTool';
 import { createExportDialog } from './ui/exportDialog';
 import { createHoverLabel } from './ui/hoverLabel';
@@ -62,8 +63,14 @@ async function bootstrap(): Promise<void> {
   const segmentation = new Segmentation(viewer);
   const crop = new CropBox(viewer);
   const sketchSettings = new SketchSettingsStore();
+  const sketchOverlay = new SketchOverlay(
+    element<HTMLCanvasElement>('sketch-overlay'),
+    viewer.canvasElement,
+  );
   const sketchTool = new SketchTool(viewer, {
     settings: () => sketchSettings.snapshot(),
+    colourCss: () => sketchSettings.colour,
+    overlay: sketchOverlay,
     notify: (message, level) => hud.toast(message, level),
   });
   viewer.addInteractionGuard(() => crop.isInteracting);
@@ -249,6 +256,7 @@ async function bootstrap(): Promise<void> {
       segmentation.dispose();
       crop.dispose();
       sketchTool.dispose();
+      sketchOverlay.dispose();
       viewer.dispose();
     },
     { once: true },
