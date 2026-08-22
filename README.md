@@ -67,7 +67,7 @@ Choose **Sketch** in the bottom toolbar or press `S`, then draw with the left bu
 
 **Ink** is a camera-facing ribbon, **Tube** is round and view-independent, **Marker** is wide and translucent, and **Spray** creates deterministic scattered blobs. Mouse input uses full pressure; a pen changes width and opacity when **Pressure** is enabled. Right-drag, middle-drag, or `Alt`+left-drag keeps the camera available while drawing.
 
-The first stroke creates an undoable `Sketch` layer. Later strokes append to the active unlocked sketch layer, or the topmost unlocked sketch layer. Sketch layers use the same visibility, lock, duplicate, merge, delete, solo, floor, transform, undo, and export tools as scan layers. Choose **Erase stroke** or press `X`, then click or drag across strokes; erasing hides each whole vector stroke and is undoable.
+The first stroke creates an undoable `Sketch` layer. Later strokes append to the active unlocked sketch layer, or the topmost unlocked sketch layer. Sketch layers use the same visibility, lock, duplicate, merge, delete, solo, floor, transform, undo, and export tools as scan layers. Choose **Erase** or press `X`, then drag over the scene: like Photoshop's eraser it hides every splat of the **active layer** under the brush (the brush uses the SKETCH size in screen pixels), sketch or scan alike, as one undoable step.
 
 PLY export bakes sketch gaussians with their colour, opacity, placement, and layer transform. Re-import preserves their rendered splats, but standard PLY has no vector-stroke metadata, so a re-imported export behaves as a scan rather than retaining stroke-level erase handles.
 
