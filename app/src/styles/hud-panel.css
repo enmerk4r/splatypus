@@ -17,15 +17,15 @@
 .brand {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 13px;
+  gap: 10px;
+  margin-bottom: 12px;
   font-weight: 800;
   letter-spacing: 0.15em;
 }
 
 .brand-mark {
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
   object-fit: contain;
   /* The mark is lime in the file; a faint glow lifts it off the glass panel. */
   filter: drop-shadow(0 0 6px rgba(184, 243, 74, 0.35));

@@ -69,9 +69,9 @@ select:focus-visible {
 }
 
 .empty-logo {
-  width: clamp(64px, 9vw, 96px);
+  width: clamp(128px, 20vw, 208px);
   height: auto;
-  margin-bottom: 22px;
+  margin-bottom: 26px;
   filter: drop-shadow(0 0 28px rgba(184, 243, 74, 0.28));
   animation: logo-in 700ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
@@ -94,7 +94,7 @@ select:focus-visible {
 }
 
 .eyebrow {
-  margin-bottom: 24px;
+  margin-bottom: 10px;
   color: var(--lime);
   font-family: 'SFMono-Regular', Consolas, monospace;
   font-size: 11px;
@@ -109,6 +109,16 @@ select:focus-visible {
   font-weight: 550;
   letter-spacing: -0.065em;
   line-height: 0.93;
+}
+
+.empty-state .wordmark {
+  font-size: clamp(40px, 6.5vw, 76px);
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  /* Optical centering: the tracking adds trailing space after the last letter. */
+  margin-left: 0.14em;
+  line-height: 1;
+  color: #f1f5f2;
 }
 
 .empty-state > p {
