@@ -41,6 +41,11 @@ export class LayerGizmo {
     this.controls.setMode(mode);
   }
 
+  /** True while the pointer is over a gizmo handle or a drag is in progress. */
+  get isInteracting(): boolean {
+    return this.controls.dragging || this.controls.axis !== null;
+  }
+
   dispose(): void {
     this.setDocument();
     this.controls.removeEventListener('dragging-changed', this.onDraggingChanged);
@@ -90,7 +95,8 @@ export class LayerGizmo {
     }
     object.updateMatrix();
     object.updateMatrixWorld(true);
-    this.document?.notifyLayerChanged(layer.id);
+    // No layer-changed event per drag frame: the SetLayerTransform command on mouseUp
+    // notifies once, so panels/grid don't rebuild 60× per second while dragging.
   };
 
   private readonly onMouseUp = (): void => {

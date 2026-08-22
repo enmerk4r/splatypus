@@ -63,14 +63,9 @@ async function bootstrap(): Promise<void> {
     onPointScaleChange: (layer, scale) => {
       const model = viewer.document;
       if (!model || !layer.pointCloud) return;
-      if (
-        execute(() =>
-          model.history.push(
-            new SetPointScale(model, layer.id, layer.pointCloud!.pointScale, scale),
-          ),
-        )
-      )
-        void layer.sync();
+      execute(() =>
+        model.history.push(new SetPointScale(model, layer.id, layer.pointCloud!.pointScale, scale)),
+      );
     },
     onPointBudgetChange: (layer, budget) => void imports.changePointBudget(layer.id, budget),
   });
@@ -139,6 +134,10 @@ async function bootstrap(): Promise<void> {
       void imports.open({ kind: 'url', url: sample.url, name: sample.name });
     } else hud.toast(`Unknown sample “${initial.sample}”.`);
   }
+
+  // Dev-only console hook: `__splatypus.viewer.document`, `__splatypus.viewer.renderOnce()`.
+  if (import.meta.env.DEV)
+    (window as unknown as { __splatypus?: unknown }).__splatypus = { viewer, imports };
 
   window.addEventListener('beforeunload', (event) => {
     if (viewer.document?.history.canUndo()) event.preventDefault();

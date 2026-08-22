@@ -117,6 +117,11 @@ export class Viewer extends EventTarget {
   frame(): void {
     if (this.documentValue) this.cameraRig.frame(this.documentValue.getRobustBounds());
   }
+
+  /** Render a single frame outside the animation loop (used by the dev console hook). */
+  renderOnce(): void {
+    this.onFrame(performance.now());
+  }
   setView(view: AxisView): void {
     this.cameraRig.setView(view);
   }
@@ -229,15 +234,18 @@ export class Viewer extends EventTarget {
       event.ctrlKey ||
       event.metaKey ||
       event.shiftKey ||
-      this.cameraRig.mode !== 'orbit'
+      this.cameraRig.mode !== 'orbit' ||
+      this.gizmo.isInteracting // a click on a gizmo handle must not change the selection
     )
       return;
     if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 4) return;
-    const hit = pickLayer(
-      document,
-      this.camera,
-      eventPointer(event, this.canvas.getBoundingClientRect()),
-    );
+    const rect = this.canvas.getBoundingClientRect();
+    const pointer = eventPointer(event, rect);
+    // Spark's raycast misses sparse point clouds (the ray slips between tiny gaussians), so fall
+    // back to the nearest projected centre within a few pixels — same as double-click retargeting.
+    const hit =
+      pickLayer(document, this.camera, pointer) ??
+      nearestProjectedPoint(document, this.camera, pointer, rect);
     document.setSelection(hit ? [hit.layer.id] : []);
   };
 }

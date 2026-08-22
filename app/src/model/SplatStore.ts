@@ -110,7 +110,20 @@ export class SplatStore {
     return this.slice(indices);
   }
 
+  private boundsCache?: StoreBounds;
+
+  /** Call after mutating `centers` or `alive` so the cached bounds are recomputed. */
+  invalidateBounds(): void {
+    this.boundsCache = undefined;
+  }
+
+  /** Percentile (2–98 %) bounds of live centres in layer-local space; cached until invalidated. */
   computeRobustBounds(stride = Math.max(1, Math.ceil(this.count / 200_000))): StoreBounds {
+    this.boundsCache ??= this.measureRobustBounds(stride);
+    return this.boundsCache;
+  }
+
+  private measureRobustBounds(stride: number): StoreBounds {
     const xs: number[] = [];
     const ys: number[] = [];
     const zs: number[] = [];

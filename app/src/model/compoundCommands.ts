@@ -7,6 +7,7 @@ import type { Command } from './history';
 import { SplatStore } from './SplatStore';
 import type { ShDegree } from './SplatStore';
 import { transformStore } from './storeTransforms';
+import { rescaleLayerInPlace } from '../viewer/sync';
 
 export class DuplicateLayer implements Command {
   readonly label: string;
@@ -24,7 +25,8 @@ export class DuplicateLayer implements Command {
       store: source.store.compacted(),
       sourceName: source.sourceName,
       ...(source.pointCloud ? { pointCloud: source.pointCloud } : {}),
-      ...(source.sourceBytes ? { sourceBytes: source.sourceBytes.slice(0) } : {}),
+      // Source bytes are never mutated, so duplicates can share them instead of copying 100+ MB.
+      ...(source.sourceBytes ? { sourceBytes: source.sourceBytes } : {}),
     });
     this.duplicate.object.matrix.copy(source.object.matrix);
     this.duplicate.object.matrix.decompose(
@@ -121,11 +123,13 @@ export class SetPointScale extends LayerValueCommand<number> {
   apply(value: number): void {
     const layer = this.layer();
     if (layer.locked) throw new LockedLayerError('Unlock the layer before editing it.');
-    for (let index = 0; index < layer.store.count * 3; index += 1)
-      layer.store.scales[index] = value;
+    layer.store.scales.fill(value);
     if (layer.pointCloud) layer.pointCloud.pointScale = value;
-    layer.dirty = true;
-    void layer.sync();
+    // Patch the packed scales in place when possible; fall back to a full rebuild (e.g. LoD meshes).
+    if (!rescaleLayerInPlace(layer, value)) {
+      layer.dirty = true;
+      void layer.sync();
+    }
     this.document.notifyLayerChanged(layer.id);
   }
 }

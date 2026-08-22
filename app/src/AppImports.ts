@@ -36,8 +36,8 @@ export class AppImports {
         return;
       }
       const next = new Document(loaded.name);
+      // Nothing is selected after an open: the gizmo only appears once the user picks a layer.
       next.addLayer(loaded.layer);
-      next.setSelection([loaded.layer.id]);
       next.history.clear();
       this.viewer.setDocument(next);
       this.emptyState.hidden = true;

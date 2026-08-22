@@ -75,11 +75,17 @@ export function createPanel(
       viewer.spark.maxStdDev = event.value;
     });
 
+  // The active layer, or the only layer when nothing is selected (e.g. right after opening a scan).
+  const pointCloudLayer = (): Layer | undefined => {
+    const document = viewer.document;
+    if (!document) return undefined;
+    return document.active() ?? (document.layers.length === 1 ? document.layers[0] : undefined);
+  };
   const points = pane.addFolder({ title: 'Point cloud', expanded: true });
   points
     .addBinding(settings, 'pointSizeMul', { label: 'Point size ×', min: 0.1, max: 8, step: 0.05 })
     .on('change', (event) => {
-      const layer = viewer.document?.active();
+      const layer = pointCloudLayer();
       if (event.last && layer?.pointCloud)
         callbacks.onPointScaleChange(layer, layer.pointCloud.basePointScale * event.value);
     });
@@ -91,7 +97,7 @@ export function createPanel(
       step: 0.25,
     })
     .on('change', (event) => {
-      const layer = viewer.document?.active();
+      const layer = pointCloudLayer();
       if (event.last && layer?.pointCloud)
         callbacks.onPointBudgetChange(layer, Math.round(event.value * 1e6));
     });
@@ -106,7 +112,7 @@ export function createPanel(
       observed?.addEventListener('selection-changed', sync);
       observed?.addEventListener('layer-changed', sync);
     }
-    const info = document?.active()?.pointCloud;
+    const info = pointCloudLayer()?.pointCloud;
     points.hidden = !info;
     settings.grid = viewer.isGridVisible;
     settings.upAxis = viewer.upAxis;

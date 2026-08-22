@@ -49,3 +49,32 @@ The in-app browser discovery list was empty in this agent session. The following
 - SuperSplat upload/orientation/colour, Chrome file-picker save, Firefox/Safari download fallback, and the three-browser matrix.
 
 Static checks, unit tests, production build, local real-file decode/export benchmarks, and the deployed Pages workflow are recorded separately in the repository and CI.
+
+## Review addendum (2026-08-22, Claude)
+
+Reviewed Codex's Phase 2 against `PHASE2_SPEC.md`; lint, 17 unit tests and the production build were green on arrival. Browser checks ran in Chrome on the RTX 5070 Ti laptop with the Vite dev server. Changes made during review:
+
+- **SH encoding moved into `constructSplats`** (`viewer/sync.ts`). It previously ran after `mesh.initialized`, and per splat called `store.liveCount()` (a full pass over the alive mask) for every band — O(N²) for SH files — and allocated three `Float32Array`s per splat. Spark also builds its SH textures lazily from `extra.sh*` when the generator is first compiled, so encoding after initialisation risked a DC-only first frame. Now one pass, reused band buffers, `setMaxSh` once.
+- **Sync race**: `layer.dirty` is cleared at the *start* of a sync and `Layer.sync()` re-runs if the store was dirtied while a rebuild was in flight (previously a second edit during a sync was silently dropped).
+- **Point-size fast path**: `SetPointScale` patches packed scales in place (`rescaleLayerInPlace`) when the mesh has no LoD tree; only LoD meshes (≥ 1.5 M) rebuild. The store is updated in both cases so export stays correct.
+- **Gizmo drag no longer emits `layer-changed` per frame** — it was triggering a full layers-panel re-render, Tweakpane refresh, HUD refresh and a grid rebuild (with a 200 k-sample percentile sort per layer) every animation frame. The `SetLayerTransform` command on mouse-up notifies once. `SplatStore.computeRobustBounds()` is now cached (`invalidateBounds()` for later phases that mutate centres/alive).
+- **Click selection**: Spark's raycast misses sparse point clouds (the ray slips between 1–2 cm gaussians), so `Viewer.onPointerUp` now falls back to the screen-space nearest centre (12 px), like double-click retargeting. A click on a gizmo handle no longer clears the selection (`LayerGizmo.isInteracting`).
+- **Point-cloud radius regression**: `readStandardPly` estimated spacing from the *source* count while only the decimated points are kept; with the default 3 M budget on the 6.9 M Matera scan points were √3 too small. Now uses the kept count (Phase 1 behaviour).
+- **No auto-selection after Open** (the gizmo appeared on every freshly opened scene). The VIEW › Point cloud folder falls back to the only layer when nothing is selected.
+- `DuplicateLayer` shares the immutable source bytes instead of copying them (100 MB per duplicate for point clouds).
+- Dev-only console hook: `window.__splatypus = { viewer, imports }` and `Viewer.renderOnce()` (guarded by `import.meta.env.DEV`) — used for headless/background-tab testing.
+
+Browser evidence (Chrome, RTX 5070 Ti):
+
+| Step | Result |
+| --- | --- |
+| `?sample=Butterfly` (SPZ, SH3) | decode 447 ms in worker, sync 128 ms, view-dependent colour renders, 240 fps |
+| Shift-add `models/splat.ply` | 2 layers · 439 k; decode 215 ms, sync 44 ms |
+| Gizmo translate drag → Ctrl+Z ×2 → Ctrl+Shift+Z, Ctrl+Y | transform and add undone/redone in order; labels correct |
+| DUP → MRG (2 × 262 k) → undo → redo → MRG with Butterfly (SH0 + SH3) → undo | merged counts 524 288 / 701 420, SH padded, originals restored in order |
+| Export (fallback `<a download>`, SH on) | 173 953 728 B in ~4 s, header byte-exact, 701 420 vertices |
+| Reopen the export | decode 1 122 ms, sync 268 ms, identical look, SH3 retained |
+| Matera 6.9 M RGB cloud, 3 M budget | fetch+decode+pack+LoD 6.4 s total (decode 868 ms, pack+LoD 4 978 ms), Z-up, 240 fps |
+| Canvas click selects / empty click clears | 14 ms / 33 ms with the screen-space fallback |
+
+Not verified here: Firefox/Safari, SuperSplat import of the export (header and values match the reference 3DGS layout; please drag one export onto https://superspl.at/editor), 10× reload memory profile.

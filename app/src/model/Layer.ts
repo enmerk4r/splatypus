@@ -69,9 +69,12 @@ export class Layer {
 
   async sync(): Promise<number> {
     if (this.syncInFlight) return this.syncInFlight;
-    this.syncInFlight = syncLayer(this).finally(() => {
-      this.syncInFlight = undefined;
-    });
+    this.syncInFlight = syncLayer(this)
+      .finally(() => {
+        this.syncInFlight = undefined;
+      })
+      // The store changed while we were rebuilding: run again so the GPU cache catches up.
+      .then((elapsed) => (this.dirty ? this.sync().then((more) => elapsed + more) : elapsed));
     return this.syncInFlight;
   }
 

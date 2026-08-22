@@ -120,7 +120,8 @@ export function readStandardPly(
     }
   }
   if (pointCloud) {
-    const basePointScale = estimatePointScale(arrays.centers, sourceCount);
+    // Spacing must reflect the points actually kept: after decimation they are farther apart.
+    const basePointScale = estimatePointScale(arrays.centers, count);
     const pointScale = basePointScale * (options.pointSizeMul ?? 1);
     arrays.scales.fill(pointScale);
     return {
