@@ -38,9 +38,9 @@
       <input id="file-input" class="sr-only" type="file" accept=".ply,.spz,.splat,.ksplat,.sog" />
 
       <aside id="hud" class="hud" aria-live="polite">
-        <div class="brand">
+        <button id="go-home" class="brand" type="button" title="Close this scene and start over">
           <img class="brand-mark" src="./logo.svg" alt="" /><span>SPLATYPUS</span>
-        </div>
+        </button>
         <dl>
           <div>
             <dt>FPS</dt>
@@ -68,9 +68,20 @@
         </div>
       </aside>
 
-      <div id="panel" class="panel-host"></div>
+      <aside id="library" class="library" hidden></aside>
 
-      <aside id="segments" class="segments"></aside>
+      <aside id="inspector" class="inspector" hidden>
+        <div class="inspector-tabs" role="tablist">
+          <button id="tab-object" type="button" role="tab" aria-selected="true">Object</button>
+          <button id="tab-viewport" type="button" role="tab" aria-selected="false">Viewport</button>
+        </div>
+        <div id="pane-object" class="inspector-pane" role="tabpanel"></div>
+        <div id="pane-viewport" class="inspector-pane" role="tabpanel" hidden>
+          <div id="panel" class="panel-host"></div>
+        </div>
+      </aside>
+
+      <div id="toolbar" class="toolbar" hidden></div>
       <div id="drag-overlay" class="drag-overlay" hidden>
         <div><strong>Drop to open</strong><span>The current scene will be replaced</span></div>
       </div>

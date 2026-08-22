@@ -1,5 +1,6 @@
 import './style.css';
 import { wireFileInput } from './io/dragDrop';
+import { exportPly, saveBlob } from './io/exportPly';
 import { loadGroups, tryLoadSidecar } from './io/loadGroups';
 import { loadSplat, LOD_ABOVE_SPLATS } from './io/loadSplat';
 import type { LoadOptions, SplatSource } from './io/loadSplat';
@@ -11,7 +12,9 @@ import { GroupMapError } from './splats/groups';
 import { Hud } from './ui/hud';
 import { createPanel } from './ui/panel';
 import { createHoverLabel } from './ui/hoverLabel';
-import { createSegmentsPanel } from './ui/segmentsPanel';
+import { createInspector } from './ui/inspector';
+import { createLibraryPanel } from './ui/libraryPanel';
+import { createToolbar } from './ui/toolbar';
 import { wireShortcuts } from './ui/shortcuts';
 import { SplatDocument } from './viewer/SplatDocument';
 import { Viewer, WebGLUnavailableError } from './viewer/Viewer';
@@ -57,9 +60,58 @@ async function bootstrap(): Promise<void> {
   const segments = new Segments(viewer);
   const overlay = new GroupOverlay(viewer, segments);
   const gizmo = new LayerGizmo(viewer);
-  const segmentsPanel = createSegmentsPanel(element('segments'), viewer, segments, overlay);
-  // One notion of "the object being edited", shared by the gizmo and the outliner.
+  // One notion of "the object being edited", shared by the gizmo, the outliner, and the
+  // toolbar, so that none of them can disagree about what is selected.
   segments.addEventListener('active-changed', () => gizmo.attach(segments.activeLayer));
+
+  /**
+   * Writes the scene as it now stands: the scan without whatever has been split away or
+   * deleted, plus every object with its transform folded in.
+   */
+  const exportScene = (): void => {
+    const current = viewer.document;
+    if (!current) return;
+    const taken = new Set<number>();
+    for (const layer of segments.allLayers()) {
+      for (const index of layer.indices ?? []) taken.add(index);
+    }
+    const sources = [
+      { mesh: current.mesh, skip: (index: number): boolean => taken.has(index) },
+      ...segments
+        .allLayers()
+        .filter((layer) => layer.mesh && !layer.hidden)
+        .map((layer) => ({ mesh: layer.mesh! })),
+    ];
+    const name = current.name.replace(/\.[^.]+$/, '');
+    saveBlob(exportPly(sources), `${name}-edited.ply`);
+    hud.toast(`Exported ${name}-edited.ply`);
+  };
+
+  const goHome = (): void => {
+    viewer.clearDocument();
+    hud.setDocument();
+    hud.setReady();
+    emptyState.hidden = false;
+    element('library').hidden = true;
+    element('inspector').hidden = true;
+    element('toolbar').hidden = true;
+    sampleSelect.value = '';
+  };
+
+  const libraryPanel = createLibraryPanel(element('library'), viewer, segments, overlay, {
+    onOpenFile: () => fileInput.click(),
+    onExport: exportScene,
+  });
+  const toolbar = createToolbar(element('toolbar'), segments, gizmo);
+  const inspector = createInspector(
+    element('inspector'),
+    element('pane-object'),
+    { object: element('tab-object'), viewport: element('tab-viewport') },
+    { object: element('pane-object'), viewport: element('pane-viewport') },
+    segments,
+    gizmo,
+  );
+  element('go-home').addEventListener('click', goHome);
   const hoverLabel = createHoverLabel(element('hover-label'), segments);
   let loadSequence = 0;
 
@@ -107,6 +159,8 @@ async function bootstrap(): Promise<void> {
       hud.setDocument(document);
       hud.setReady();
       emptyState.hidden = true;
+      element('library').hidden = false;
+      element('inspector').hidden = false;
       const info = loaded.pointCloud;
       if (info && info.stride > 1) {
         hud.toast(
@@ -213,7 +267,9 @@ async function bootstrap(): Promise<void> {
       disposeDrop();
       disposeShortcuts();
       panel.dispose();
-      segmentsPanel.dispose();
+      libraryPanel.dispose();
+      inspector.dispose();
+      toolbar.dispose();
       hoverLabel.dispose();
       gizmo.dispose();
       viewer.dispose();

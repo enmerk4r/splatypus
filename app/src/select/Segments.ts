@@ -1,4 +1,4 @@
-import { Box3, Color, Group, Vector3 } from 'three';
+import { Box3, Color, Group, Quaternion, Vector3 } from 'three';
 import type { Object3D } from 'three';
 import { PackedSplats, SplatMesh } from '@sparkjsdev/spark';
 import type { Viewer } from '../viewer/Viewer';
@@ -28,6 +28,10 @@ export interface SegmentLayer {
   splatCount: number;
   /** Extent in the object's own space, for snapping and framing. */
   bounds: Box3;
+  /** Placement at creation, so a transform can be undone without a command stack. */
+  origin: Vector3;
+  originQuaternion: Quaternion;
+  originScale: Vector3;
   hidden: boolean;
 }
 
@@ -74,6 +78,9 @@ export class Segments extends EventTarget {
   private hoverValue?: { groupId: number; indices: Uint32Array };
   private activeLayerValue?: SegmentLayer;
   private isolatedValue?: SegmentLayer;
+  /** Objects ticked in the outliner, by id — what Group acts on. Ids rather than layers,
+   *  so a tick cannot pin a deleted object in memory. */
+  private readonly tickedIds = new Set<number>();
   private nextId = 1;
 
   constructor(private readonly viewer: Viewer) {
@@ -285,6 +292,9 @@ export class Segments extends EventTarget {
       children: [],
       splatCount: selection.indices.length,
       bounds: boundsOf(document.centres, selection.indices, centroid),
+      origin: mesh.position.clone(),
+      originQuaternion: mesh.quaternion.clone(),
+      originScale: mesh.scale.clone(),
       hidden: false,
     };
     this.layers.push(layer);
@@ -316,6 +326,7 @@ export class Segments extends EventTarget {
     const siblings = this.siblingsOf(layer);
     const at = siblings.indexOf(layer);
     if (at >= 0) siblings.splice(at, 1);
+    this.tickedIds.delete(layer.id);
     if (this.activeLayerValue === layer) this.activate(undefined);
     if (this.isolatedValue === layer) this.isolate(undefined);
     layer.object.removeFromParent();
@@ -358,6 +369,36 @@ export class Segments extends EventTarget {
     this.dispatchEvent(new Event('active-changed'));
   }
 
+  /** Objects ticked for the next Group, in outliner order. */
+  get ticked(): SegmentLayer[] {
+    return this.allLayers().filter((layer) => this.tickedIds.has(layer.id));
+  }
+
+  isTicked(layer: SegmentLayer): boolean {
+    return this.tickedIds.has(layer.id);
+  }
+
+  setTicked(layer: SegmentLayer, ticked: boolean): void {
+    if (ticked) this.tickedIds.add(layer.id);
+    else this.tickedIds.delete(layer.id);
+    this.dispatchEvent(new Event('layers-changed'));
+  }
+
+  groupTicked(): SegmentLayer | undefined {
+    const made = this.groupLayers(this.ticked);
+    if (made) this.tickedIds.clear();
+    return made;
+  }
+
+  /** Puts an object back where it was lifted out, undoing every move since. */
+  resetTransform(layer: SegmentLayer): void {
+    layer.object.position.copy(layer.origin);
+    layer.object.quaternion.copy(layer.originQuaternion);
+    layer.object.scale.copy(layer.originScale);
+    layer.object.updateMatrixWorld(true);
+    this.dispatchEvent(new Event('layers-changed'));
+  }
+
   rename(layer: SegmentLayer, name: string): void {
     const trimmed = name.trim();
     if (!trimmed || trimmed === layer.name) return;
@@ -383,6 +424,9 @@ export class Segments extends EventTarget {
     copy.object.quaternion.copy(layer.object.quaternion);
     copy.object.scale.copy(layer.object.scale);
     copy.object.updateMatrixWorld(true);
+    copy.origin.copy(copy.object.position);
+    copy.originQuaternion.copy(copy.object.quaternion);
+    copy.originScale.copy(copy.object.scale);
     this.siblingsOf(layer).push(copy);
     this.dispatchEvent(new Event('layers-changed'));
     return copy;
@@ -411,6 +455,9 @@ export class Segments extends EventTarget {
       children: [],
       splatCount: layer.splatCount,
       bounds: layer.bounds.clone(),
+      origin: new Vector3(),
+      originQuaternion: new Quaternion(),
+      originScale: new Vector3(1, 1, 1),
       hidden: false,
     };
     for (const child of layer.children) {
@@ -492,6 +539,9 @@ export class Segments extends EventTarget {
       children: [...chosen],
       splatCount: chosen.reduce((total, layer) => total + layer.splatCount, 0),
       bounds,
+      origin: parent.position.clone(),
+      originQuaternion: parent.quaternion.clone(),
+      originScale: parent.scale.clone(),
       hidden: false,
     };
     this.layers.push(group);
@@ -622,6 +672,7 @@ export class Segments extends EventTarget {
     this.hoverValue = undefined;
     this.activeLayerValue = undefined;
     this.isolatedValue = undefined;
+    this.tickedIds.clear();
     this.dispatchEvent(new Event('active-changed'));
     this.dispatchEvent(new Event('groups-changed'));
     this.dispatchEvent(new Event('selection-changed'));
