@@ -68,16 +68,41 @@
         </div>
       </aside>
 
-      <aside id="library" class="library" hidden></aside>
+      <aside id="library" class="library" hidden>
+        <div class="panel-head">
+          <span>Scene</span>
+          <button
+            id="library-collapse"
+            class="panel-collapse"
+            type="button"
+            aria-expanded="true"
+            aria-label="Collapse the scene panel"
+          ></button>
+        </div>
+        <div id="library-body" class="panel-body"></div>
+      </aside>
 
       <aside id="inspector" class="inspector" hidden>
-        <div class="inspector-tabs" role="tablist">
-          <button id="tab-object" type="button" role="tab" aria-selected="true">Object</button>
-          <button id="tab-viewport" type="button" role="tab" aria-selected="false">Viewport</button>
+        <div class="panel-head">
+          <div class="inspector-tabs" role="tablist">
+            <button id="tab-object" type="button" role="tab" aria-selected="true">Object</button>
+            <button id="tab-viewport" type="button" role="tab" aria-selected="false">
+              Viewport
+            </button>
+          </div>
+          <button
+            id="inspector-collapse"
+            class="panel-collapse"
+            type="button"
+            aria-expanded="true"
+            aria-label="Collapse the inspector"
+          ></button>
         </div>
-        <div id="pane-object" class="inspector-pane" role="tabpanel"></div>
-        <div id="pane-viewport" class="inspector-pane" role="tabpanel" hidden>
-          <div id="panel" class="panel-host"></div>
+        <div class="panel-body">
+          <div id="pane-object" class="inspector-pane" role="tabpanel"></div>
+          <div id="pane-viewport" class="inspector-pane" role="tabpanel" hidden>
+            <div id="panel" class="panel-host"></div>
+          </div>
         </div>
       </aside>
 

@@ -1,5 +1,6 @@
 import type { LayerGizmo } from '../select/LayerGizmo';
 import type { Segments } from '../select/Segments';
+import { icon } from './icons';
 
 type GizmoMode = 'translate' | 'rotate' | 'scale';
 
@@ -14,25 +15,30 @@ export function createToolbar(
   segments: Segments,
   gizmo: LayerGizmo,
 ): { dispose: () => void } {
+  /** label doubles as the tooltip and the screen-reader name; the icon carries neither. */
+  const button = (attr: string, name: string, label: string, hint: string): string =>
+    `<button type="button" ${attr}="${name}" title="${label} — ${hint}" aria-label="${label}">` +
+    `${icon(name)}<span class="sr-only">${label}</span></button>`;
+
   host.innerHTML = `
     <div class="toolbar-group" role="group" aria-label="Transform mode">
-      <button type="button" data-mode="translate" aria-pressed="true" title="Move (W)">Move</button>
-      <button type="button" data-mode="rotate" aria-pressed="false" title="Rotate (E)">Rotate</button>
-      <button type="button" data-mode="scale" aria-pressed="false" title="Scale (R)">Scale</button>
+      ${button('data-mode', 'translate', 'Move', 'drag the object')}
+      ${button('data-mode', 'rotate', 'Rotate', 'spin it in place')}
+      ${button('data-mode', 'scale', 'Scale', 'resize it')}
     </div>
     <div class="toolbar-rule"></div>
     <div class="toolbar-group">
-      <button type="button" data-op="duplicate" title="Copy this object">Duplicate</button>
-      <button type="button" data-op="array" title="Copy it four more times in a row">Array ×5</button>
-      <button type="button" data-op="group" title="Nest the ticked objects under one">Group</button>
-      <button type="button" data-op="ungroup" title="Dissolve this grouping">Ungroup</button>
+      ${button('data-op', 'duplicate', 'Duplicate', 'copy this object')}
+      ${button('data-op', 'array', 'Array ×5', 'copy it four more times in a row')}
+      ${button('data-op', 'group', 'Group', 'nest the ticked objects under one')}
+      ${button('data-op', 'ungroup', 'Ungroup', 'dissolve this grouping')}
     </div>
     <div class="toolbar-rule"></div>
     <div class="toolbar-group">
-      <button type="button" data-op="isolate" title="Hide everything else">Isolate</button>
-      <button type="button" data-op="floor" title="Drop it onto the ground plane">Snap to floor</button>
-      <button type="button" data-op="merge" title="Put its splats back into the scan">Merge back</button>
-      <button type="button" data-op="delete" title="Take it out of the scene">Delete</button>
+      ${button('data-op', 'isolate', 'Isolate', 'hide everything else')}
+      ${button('data-op', 'floor', 'Snap to floor', 'drop it onto the ground plane')}
+      ${button('data-op', 'merge', 'Merge back', 'put its splats back into the scan')}
+      ${button('data-op', 'delete', 'Delete', 'take it out of the scene')}
     </div>
   `;
 
@@ -51,7 +57,9 @@ export function createToolbar(
     op('ungroup').disabled = !active || active.children.length === 0;
     op('group').disabled = segments.ticked.length < 2;
     op('isolate').disabled = active === undefined && segments.isolated === undefined;
-    op('isolate').textContent = segments.isolated ? 'Show all' : 'Isolate';
+    const isolateLabel = segments.isolated ? 'Show all' : 'Isolate';
+    op('isolate').title = `${isolateLabel} — hide everything else`;
+    op('isolate').setAttribute('aria-label', isolateLabel);
     op('isolate').setAttribute('aria-pressed', String(segments.isolated !== undefined));
     for (const button of modeButtons) {
       button.disabled = active === undefined;

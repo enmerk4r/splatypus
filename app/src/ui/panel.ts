@@ -41,7 +41,9 @@ export function createPanel(
     pointSizeMul: 1,
     pointBudgetM: DEFAULT_POINT_BUDGET / 1e6,
   };
-  const pane = new Pane({ title: 'VIEW', expanded: false, container });
+  // No title: the Viewport tab already names this, and a titled pane would add a
+  // second fold toggle for content the tab and the panel collapse already govern.
+  const pane = new Pane({ container });
 
   pane
     .addBinding(settings, 'background', { label: 'Background', view: 'color' })

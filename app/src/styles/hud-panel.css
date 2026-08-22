@@ -113,6 +113,56 @@
   font-size: 10px;
 }
 
+.panel-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 6px 0 12px;
+  border-bottom: 1px solid var(--line);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.panel-collapse {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+}
+
+/* A chevron drawn from a rotated corner, so there is no glyph to load or align. */
+.panel-collapse::before {
+  display: block;
+  width: 6px;
+  height: 6px;
+  margin: 0 auto;
+  border-right: 1.4px solid currentcolor;
+  border-bottom: 1.4px solid currentcolor;
+  content: '';
+  transform: translateY(-2px) rotate(225deg);
+}
+
+.panel-collapse[aria-expanded='false']::before {
+  transform: translateY(-2px) rotate(45deg);
+}
+
+.panel-body {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.is-collapsed {
+  max-height: none;
+}
+
 .panel-title {
   margin: 0 0 8px;
   font-size: 10px;
@@ -196,8 +246,15 @@
   left: 18px;
   width: min(250px, calc(100vw - 36px));
   max-height: calc(100vh - 330px);
+}
+
+.library .panel-body {
   overflow-y: auto;
-  padding: 13px 14px;
+  padding: 12px 14px;
+}
+
+.library.is-collapsed {
+  width: 148px;
 }
 
 .library-file,
@@ -241,18 +298,28 @@
   max-height: calc(100vh - 130px);
 }
 
+.inspector.is-collapsed {
+  width: auto;
+}
+
+.inspector .panel-head {
+  padding-left: 0;
+}
+
 .inspector-tabs {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  border-bottom: 1px solid var(--line);
+  display: flex;
+  min-width: 0;
 }
 
 .inspector-tabs button {
+  padding: 7px 12px;
   border: 0;
   border-radius: 0;
   background: transparent;
+  font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .inspector-tabs button[aria-selected='true'] {
@@ -366,7 +433,11 @@
 }
 
 .toolbar button {
-  white-space: nowrap;
+  display: grid;
+  width: 30px;
+  height: 28px;
+  padding: 0;
+  place-items: center;
 }
 
 .toolbar-rule {

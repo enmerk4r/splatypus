@@ -14,6 +14,7 @@ import { createPanel } from './ui/panel';
 import { createHoverLabel } from './ui/hoverLabel';
 import { createInspector } from './ui/inspector';
 import { createLibraryPanel } from './ui/libraryPanel';
+import { wireCollapse } from './ui/collapse';
 import { createToolbar } from './ui/toolbar';
 import { wireShortcuts } from './ui/shortcuts';
 import { SplatDocument } from './viewer/SplatDocument';
@@ -98,10 +99,18 @@ async function bootstrap(): Promise<void> {
     sampleSelect.value = '';
   };
 
-  const libraryPanel = createLibraryPanel(element('library'), viewer, segments, overlay, {
+  const libraryPanel = createLibraryPanel(element('library-body'), viewer, segments, overlay, {
     onOpenFile: () => fileInput.click(),
     onExport: exportScene,
   });
+  const collapses = [
+    wireCollapse(element('library'), element('library-collapse'), element('library-body')),
+    wireCollapse(
+      element('inspector'),
+      element('inspector-collapse'),
+      element('inspector').querySelector<HTMLElement>('.panel-body')!,
+    ),
+  ];
   const toolbar = createToolbar(element('toolbar'), segments, gizmo);
   const inspector = createInspector(
     element('inspector'),
@@ -268,6 +277,7 @@ async function bootstrap(): Promise<void> {
       disposeShortcuts();
       panel.dispose();
       libraryPanel.dispose();
+      for (const collapse of collapses) collapse.dispose();
       inspector.dispose();
       toolbar.dispose();
       hoverLabel.dispose();

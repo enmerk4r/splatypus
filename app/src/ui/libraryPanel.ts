@@ -22,7 +22,6 @@ export function createLibraryPanel(
   callbacks: LibraryCallbacks,
 ): { dispose: () => void } {
   host.innerHTML = `
-    <h2 class="panel-title">Scene</h2>
     <div class="library-file">
       <button type="button" id="library-open">Open file…</button>
       <button type="button" id="library-export">Export .ply</button>
