@@ -1,10 +1,15 @@
 import './style.css';
 import { wireFileInput } from './io/dragDrop';
+import { loadGroups, tryLoadSidecar } from './io/loadGroups';
 import { loadSplat, LOD_ABOVE_SPLATS } from './io/loadSplat';
 import type { LoadOptions, SplatSource } from './io/loadSplat';
 import { getInitialSource } from './io/urlParams';
+import { LayerGizmo } from './select/LayerGizmo';
+import { Segments } from './select/Segments';
+import { GroupMapError } from './splats/groups';
 import { Hud } from './ui/hud';
 import { createPanel } from './ui/panel';
+import { createSegmentsPanel } from './ui/segmentsPanel';
 import { wireShortcuts } from './ui/shortcuts';
 import { SplatDocument } from './viewer/SplatDocument';
 import { Viewer, WebGLUnavailableError } from './viewer/Viewer';
@@ -47,9 +52,33 @@ async function bootstrap(): Promise<void> {
   const sampleSelect = element<HTMLSelectElement>('sample-select');
   const flyHint = element('fly-hint');
   hud.setGpu(viewer.gpuName);
+  const segments = new Segments(viewer);
+  const gizmo = new LayerGizmo(viewer);
+  const segmentsPanel = createSegmentsPanel(element('segments'), viewer, segments, (layer) =>
+    gizmo.attach(layer),
+  );
   let loadSequence = 0;
 
-  const openSource = async (source: SplatSource, options: LoadOptions = {}): Promise<void> => {
+  const attachGroupsFile = async (file: File): Promise<void> => {
+    const document = viewer.document;
+    if (!document) {
+      hud.toast('Open a splat first, then drop its .groups sidecar.');
+      return;
+    }
+    try {
+      document.setGroups(await loadGroups({ kind: 'file', file }, document.numSplats));
+      segments.select(undefined);
+      hud.toast(`Loaded ${document.groups?.numGroups ?? 0} groups from ${file.name}.`);
+    } catch (error) {
+      hud.toast(error instanceof GroupMapError ? error.message : `Couldn't read ${file.name}.`);
+    }
+  };
+
+  const openSource = async (
+    source: SplatSource,
+    options: LoadOptions = {},
+    groupsUrl?: string,
+  ): Promise<void> => {
     const sequence = ++loadSequence;
     viewer.clearDocument();
     hud.setDocument();
@@ -85,6 +114,25 @@ async function bootstrap(): Promise<void> {
       } else if (loaded.mesh.numSplats >= LOD_ABOVE_SPLATS) {
         hud.toast('Large scene: rendering with a level-of-detail tree built at load time.');
       }
+
+      // An explicitly named sidecar must load; one merely implied by the splat URL is
+      // optional, so its absence is silent and only a malformed file is reported.
+      const groups = groupsUrl
+        ? await loadGroups({ kind: 'url', url: groupsUrl }, document.numSplats).catch(
+            (error: unknown) => {
+              hud.toast(
+                error instanceof GroupMapError ? error.message : `Couldn't read ${groupsUrl}.`,
+              );
+              return undefined;
+            },
+          )
+        : source.kind === 'url'
+          ? await tryLoadSidecar(source.url, document.numSplats, (message) => hud.toast(message))
+          : undefined;
+      if (groups && sequence === loadSequence) {
+        document.setGroups(groups);
+        segments.select(undefined);
+      }
     } catch (error) {
       if (sequence !== loadSequence) return;
       const message = error instanceof Error ? error.message : 'The splat could not be opened.';
@@ -117,6 +165,7 @@ async function bootstrap(): Promise<void> {
     element('drag-overlay'),
     (file) => void openSource({ kind: 'file', file }),
     (message) => hud.toast(message),
+    (file) => void attachGroupsFile(file),
   );
   const disposeShortcuts = wireShortcuts(viewer, () => fileInput.click());
   const updateFlyHint = (): void => {
@@ -146,13 +195,13 @@ async function bootstrap(): Promise<void> {
 
   const initial = getInitialSource();
   if (initial.url) {
-    void openSource({ kind: 'url', url: initial.url });
+    void openSource({ kind: 'url', url: initial.url }, {}, initial.groups);
   } else if (initial.sample) {
     const initialSample = initial.sample.toLowerCase();
     const sample = samples.find((candidate) => candidate.name.toLowerCase() === initialSample);
     if (sample) {
       sampleSelect.value = sample.name;
-      void openSource({ kind: 'url', url: sample.url, name: sample.name });
+      void openSource({ kind: 'url', url: sample.url, name: sample.name }, {}, initial.groups);
     } else {
       hud.toast(`Unknown sample “${initial.sample}”.`);
     }
@@ -164,6 +213,8 @@ async function bootstrap(): Promise<void> {
       disposeDrop();
       disposeShortcuts();
       panel.dispose();
+      segmentsPanel.dispose();
+      gizmo.dispose();
       viewer.dispose();
     },
     { once: true },

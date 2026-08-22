@@ -1,3 +1,5 @@
+import { isGroupsFile } from './loadGroups';
+
 const SUPPORTED_FILE = /\.(?:ply|spz|splat|ksplat|sog)$/i;
 
 export function isSupportedSplat(file: File): boolean {
@@ -10,14 +12,21 @@ export function wireFileInput(
   overlay: HTMLElement,
   onFile: (file: File) => void,
   onError: (message: string) => void,
+  onGroupsFile?: (file: File) => void,
 ): () => void {
   let dragDepth = 0;
 
   const openPicker = (): void => input.click();
   const accept = (file?: File): void => {
     if (!file) return;
+    // A .groups sidecar attaches to the open scene rather than replacing it.
+    if (isGroupsFile(file)) {
+      if (onGroupsFile) onGroupsFile(file);
+      else onError('Open a splat first, then drop its .groups sidecar.');
+      return;
+    }
     if (!isSupportedSplat(file)) {
-      onError('Unsupported file. Choose a PLY, SPZ, SPLAT, KSPLAT, or SOG file.');
+      onError('Unsupported file. Choose a PLY, SPZ, SPLAT, KSPLAT, SOG, or .groups file.');
       return;
     }
     onFile(file);
