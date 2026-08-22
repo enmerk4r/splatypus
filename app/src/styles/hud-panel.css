@@ -494,3 +494,28 @@
     max-height: 40vh;
   }
 }
+
+.crop-start {
+  width: 100%;
+}
+
+.crop-tools {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.crop-tools button[aria-pressed='true'] {
+  border-color: var(--lime);
+  color: var(--lime);
+}
+
+.crop-start + .crop-tools + .panel-status,
+.crop-tools + .panel-status {
+  margin-top: 8px;
+}
+
+#crop-undo {
+  margin-top: 6px;
+}

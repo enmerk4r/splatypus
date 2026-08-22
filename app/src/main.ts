@@ -5,6 +5,7 @@ import { loadGroups, tryLoadSidecar } from './io/loadGroups';
 import { loadSplat, LOD_ABOVE_SPLATS } from './io/loadSplat';
 import type { LoadOptions, SplatSource } from './io/loadSplat';
 import { getInitialSource } from './io/urlParams';
+import { CropBox } from './select/CropBox';
 import { GroupOverlay } from './select/GroupOverlay';
 import { LayerGizmo } from './select/LayerGizmo';
 import { Segments } from './select/Segments';
@@ -62,6 +63,7 @@ async function bootstrap(): Promise<void> {
   const segments = new Segments(viewer);
   const overlay = new GroupOverlay(viewer, segments);
   const gizmo = new LayerGizmo(viewer);
+  const crop = new CropBox(viewer);
   // One notion of "the object being edited", shared by the gizmo, the outliner, and the
   // toolbar, so that none of them can disagree about what is selected.
   segments.addEventListener('active-changed', () => gizmo.attach(segments.activeLayer));
@@ -100,7 +102,7 @@ async function bootstrap(): Promise<void> {
     sampleSelect.value = '';
   };
 
-  const libraryPanel = createLibraryPanel(element('library-body'), viewer, {
+  const libraryPanel = createLibraryPanel(element('library-body'), viewer, segments, crop, {
     onOpenFile: () => fileInput.click(),
     onExport: exportScene,
   });
@@ -287,6 +289,7 @@ async function bootstrap(): Promise<void> {
       toolbar.dispose();
       hoverLabel.dispose();
       gizmo.dispose();
+      crop.dispose();
       viewer.dispose();
     },
     { once: true },
