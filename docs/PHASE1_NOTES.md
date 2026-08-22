@@ -51,7 +51,7 @@ FPS and browser load-to-render measurements could not be collected in this agent
 ## Acceptance checklist
 
 - [x] `npm ci` succeeds from `app/`; `npm run build` succeeds; `npm run lint` has zero errors; `npm audit` reports zero vulnerabilities.
-- [ ] Pages URL loads; empty state shows all three samples; selecting each sample renders within a few seconds. Deployment and HTTP reachability will be checked after push; rendered behavior still needs an in-app browser/manual check.
+- [ ] The [Pages URL](https://enmerk4r.github.io/splatypus/) and all three gallery entries are deployed and HTTP-reachable; selecting each sample and confirming WebGL rendering within a few seconds still needs an in-app browser/manual check.
 - [ ] Drag-and-drop of a local 3DGS `.ply`, `.spz`, and `.splat` each renders Y-up. All paths are implemented; representative local files and a browser target were unavailable for manual confirmation.
 - [ ] `?url=` renders a CORS-enabled URL, and a non-CORS URL shows the friendly error. Both paths are implemented; the three configured URLs have verified wildcard CORS, but browser behavior needs manual confirmation.
 - [ ] Orbit damping/zoom-to-cursor, double-click retarget, `F`, and fly mode (WASD/QE, mouse-look, no camera jump) need manual browser confirmation.
@@ -66,7 +66,9 @@ FPS and browser load-to-render measurements could not be collected in this agent
 - A production build generated relative asset URLs and served `index.html`, the application module, and the three-entry sample manifest over Vite preview with HTTP 200.
 - `npm run dev` and `npm run preview` both started successfully on localhost.
 - Each implementation file is approximately 250 lines or fewer; UI styles are split into focused files.
-- The GitHub Pages workflow uses Node 20, `npm ci`, the production build, the Pages artifact action, and the Pages deploy action on pushes to `main`.
+- GitHub Actions run [32587017700](https://github.com/enmerk4r/splatypus/actions/runs/32587017700) passed both the clean build and deploy jobs.
+- The live Pages index, relative JavaScript and CSS bundles, three-entry sample manifest, and `.nojekyll` each returned HTTP 200 after deployment.
+- GitHub Pages is configured with `build_type: workflow`, HTTPS enforcement, and the public URL `https://enmerk4r.github.io/splatypus/`.
 
 ## Known limitations
 
