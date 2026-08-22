@@ -219,3 +219,36 @@
 .segments-bake input:disabled {
   opacity: 0.4;
 }
+
+.segments-view {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 6px 8px;
+  margin-bottom: 11px;
+  padding-bottom: 11px;
+  border-bottom: 1px solid var(--line);
+}
+
+.segments-view button {
+  grid-column: 1 / -1;
+}
+
+.segments-view button[aria-pressed='true'] {
+  border-color: var(--lime);
+  color: var(--lime);
+}
+
+.segments-view label {
+  color: #77817b;
+}
+
+.segments-view input[type='range'] {
+  width: 100%;
+  min-width: 0;
+  accent-color: var(--lime);
+}
+
+.segments-view input:disabled {
+  opacity: 0.4;
+}

@@ -1,3 +1,4 @@
+import type { GroupOverlay } from '../select/GroupOverlay';
 import type { BakeBasis, SegmentLayer, Segments } from '../select/Segments';
 import type { GroupMap } from '../splats/groups';
 import type { Viewer } from '../viewer/Viewer';
@@ -10,6 +11,7 @@ export function createSegmentsPanel(
   host: HTMLElement,
   viewer: Viewer,
   segments: Segments,
+  overlay: GroupOverlay,
   onSelectLayer: (layer: SegmentLayer | undefined) => void,
 ): { dispose: () => void } {
   host.innerHTML = `
@@ -24,6 +26,11 @@ export function createSegmentsPanel(
       <label for="segments-detail">Detail</label>
       <input type="range" id="segments-detail" min="1" max="5" step="1" value="4" />
       <button type="button" id="segments-rebake">Re-segment</button>
+    </div>
+    <div class="segments-view">
+      <button type="button" id="segments-overlay" aria-pressed="false">Show labels</button>
+      <label for="segments-blend">Blend</label>
+      <input type="range" id="segments-blend" min="0" max="100" step="5" value="85" />
     </div>
     <p class="segments-status" id="segments-status">No segmentation loaded.</p>
     <div class="segments-actions" hidden id="segments-actions">
@@ -42,9 +49,28 @@ export function createSegmentsPanel(
   const sidecarOption = host.querySelector<HTMLOptionElement>('#segments-basis-sidecar')!;
   const detailInput = host.querySelector<HTMLInputElement>('#segments-detail')!;
   const rebakeButton = host.querySelector<HTMLButtonElement>('#segments-rebake')!;
+  const overlayButton = host.querySelector<HTMLButtonElement>('#segments-overlay')!;
+  const blendInput = host.querySelector<HTMLInputElement>('#segments-blend')!;
 
   /** The sidecar that came with the scene, kept so the user can go back to it. */
   let sidecar: GroupMap | undefined;
+
+  /** One line about the segmentation as a whole: how many objects, and how much of the
+   *  scene they actually cover. The uncovered share is the half users never discover on
+   *  their own, so it is named rather than left as the remainder. */
+  const summarise = (groups: GroupMap): string => {
+    const covered = Math.round(groups.coverage * 100);
+    return `${groups.numGroups} groups · ${covered}% covered · ${100 - covered}% unsegmented`;
+  };
+
+  const renderOverlay = (): void => {
+    const on = overlay.enabled;
+    overlayButton.textContent = on ? 'Hide labels' : 'Show labels';
+    overlayButton.setAttribute('aria-pressed', String(on));
+    overlayButton.disabled = !overlay.available;
+    blendInput.disabled = !on;
+    blendInput.value = String(Math.round(overlay.blend * 100));
+  };
 
   const renderSelection = (): void => {
     const document = viewer.document;
@@ -74,7 +100,7 @@ export function createSegmentsPanel(
           : segments.outcome === 'unassigned'
             ? 'That splat is not in any group. Re-bake with a coarser colour cell to cover more of the scene.'
             : 'Click the scene to select one.';
-      status.textContent = `${groups.numGroups} groups from “${groups.meta.source}”. ${hint}`;
+      status.textContent = `${summarise(groups)}. ${hint}`;
       actions.hidden = true;
       return;
     }
@@ -132,9 +158,12 @@ export function createSegmentsPanel(
 
   const onSelectionChanged = (): void => {
     syncSidecarOption();
+    renderOverlay();
     renderSelection();
     renderLayers();
   };
+  const onOverlayToggle = (): void => overlay.setEnabled(!overlay.enabled);
+  const onBlendInput = (): void => overlay.setBlend(Number(blendInput.value) / 100);
   const onLayersChanged = (): void => {
     renderSelection();
     renderLayers();
@@ -158,11 +187,9 @@ export function createSegmentsPanel(
     requestAnimationFrame(() => {
       const result = segments.rebake(basisSelect.value as BakeBasis, Number(detailInput.value));
       rebakeButton.disabled = false;
-      if (!result) return;
-      const total = viewer.document?.numSplats ?? 1;
-      status.textContent =
-        `${result.numGroups} groups · ` +
-        `${Math.round((result.assigned / total) * 100)}% of splats covered`;
+      const groups = viewer.document?.groups;
+      if (!result || !groups) return;
+      status.textContent = summarise(groups);
     });
   };
 
@@ -170,6 +197,9 @@ export function createSegmentsPanel(
     onSelectLayer((event as CustomEvent<SegmentLayer>).detail);
   };
 
+  overlay.addEventListener('overlay-changed', renderOverlay);
+  overlayButton.addEventListener('click', onOverlayToggle);
+  blendInput.addEventListener('input', onBlendInput);
   segments.addEventListener('layer-picked', onLayerPicked);
   segments.addEventListener('selection-changed', onSelectionChanged);
   segments.addEventListener('layers-changed', onLayersChanged);
@@ -182,6 +212,9 @@ export function createSegmentsPanel(
 
   return {
     dispose: (): void => {
+      overlay.removeEventListener('overlay-changed', renderOverlay);
+      overlayButton.removeEventListener('click', onOverlayToggle);
+      blendInput.removeEventListener('input', onBlendInput);
       segments.removeEventListener('layer-picked', onLayerPicked);
       segments.removeEventListener('selection-changed', onSelectionChanged);
       segments.removeEventListener('layers-changed', onLayersChanged);

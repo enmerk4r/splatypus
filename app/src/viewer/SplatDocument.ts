@@ -173,6 +173,56 @@ export class SplatDocument {
     });
   }
 
+  /**
+   * Repaints every splat, leaving geometry and opacity untouched.
+   *
+   * This writes the packed array directly instead of going through getSplat/setSplat,
+   * which allocate four THREE objects per splat — at scene scale that difference is
+   * what separates an instant repaint from a visible stall. Only the low three bytes
+   * are written; the top byte holds opacity, and a repaint must not unhide a splat
+   * that a split layer hid.
+   */
+  paintBy(colourAt: (index: number, out: Color) => void): void {
+    const packed = this.mesh.packedSplats;
+    const array = packed?.packedArray;
+    if (!packed || !array) return;
+    const min = packed.splatEncoding?.rgbMin ?? 0;
+    const range = (packed.splatEncoding?.rgbMax ?? 1) - min || 1;
+    const scratch = new Color();
+    for (let index = 0; index < this.numSplats; index += 1) {
+      colourAt(index, scratch);
+      const slot = index * 4;
+      array[slot] =
+        (array[slot]! & 0xff000000) |
+        quantise(scratch.r, min, range) |
+        (quantise(scratch.g, min, range) << 8) |
+        (quantise(scratch.b, min, range) << 16);
+      // An edit in flight remembers the colour it has to undo to; that is now this one.
+      this.edited.get(index)?.color.copy(scratch);
+    }
+    this.commit();
+  }
+
+  /** Puts every splat back to the colour it was loaded with. */
+  resetColours(): void {
+    this.paintBy((index, out) => {
+      out.setRGB(
+        this.colours[index * 3]!,
+        this.colours[index * 3 + 1]!,
+        this.colours[index * 3 + 2]!,
+      );
+    });
+  }
+
+  /** The colour a splat had at load time, before any overlay or tint. */
+  baseColour(index: number, out: Color): Color {
+    return out.setRGB(
+      this.colours[index * 3]!,
+      this.colours[index * 3 + 1]!,
+      this.colours[index * 3 + 2]!,
+    );
+  }
+
   /** Makes splats invisible without removing them, so the change stays reversible. */
   hide(indices: Iterable<number>): void {
     this.edit(indices, (splat) => {
@@ -262,4 +312,9 @@ export class SplatDocument {
   dispose(): void {
     this.mesh.dispose();
   }
+}
+
+/** Packs a linear colour channel into the byte the renderer reads it from. */
+function quantise(value: number, min: number, range: number): number {
+  return Math.max(0, Math.min(255, Math.round(((value - min) / range) * 255)));
 }

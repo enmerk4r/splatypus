@@ -25,6 +25,10 @@ export interface SelectionState {
 
 const HIGHLIGHT = new Color('#4ade80');
 const HIGHLIGHT_STRENGTH = 0.65;
+/** Hover is a lift towards white rather than towards the selection green, so that
+ *  "this is what you would get" never looks like "this is what you have". */
+const HOVER = new Color('#e8f6ec');
+const HOVER_STRENGTH = 0.3;
 
 /** What a re-bake groups splats by. */
 export type BakeBasis = 'colour' | 'position';
@@ -49,11 +53,16 @@ export class Segments extends EventTarget {
   private readonly layers: SegmentLayer[] = [];
   private selectionValue?: SelectionState;
   private outcomeValue: PickOutcome = 'none';
+  private hoverValue?: { groupId: number; indices: Uint32Array };
 
   constructor(private readonly viewer: Viewer) {
     super();
     viewer.addEventListener('canvas-click', (event) => {
       this.onClick((event as CustomEvent<{ event: MouseEvent }>).detail.event);
+    });
+    viewer.addEventListener('canvas-hover', (event) => {
+      const detail = (event as CustomEvent<{ event: PointerEvent; point?: Vector3 }>).detail;
+      this.onHover(detail.point, detail.event);
     });
     viewer.addEventListener('document-changed', () => this.reset());
   }
@@ -68,6 +77,11 @@ export class Segments extends EventTarget {
 
   get segmentLayers(): readonly SegmentLayer[] {
     return this.layers;
+  }
+
+  /** Group under the pointer, when it is one that could be selected. */
+  get hover(): number | undefined {
+    return this.hoverValue?.groupId;
   }
 
   /**
@@ -91,6 +105,65 @@ export class Segments extends EventTarget {
     if (point) this.pick(point);
   }
 
+  /**
+   * Lights the group under the pointer without selecting it, and reports its name so
+   * the cursor can carry a label.
+   *
+   * Two groups deliberately never take a hover tint: the selected one, because the
+   * hover would replace its highlight and then strip it again on the way out, and one
+   * already split into a layer, because its splats in the scan are hidden — undoing a
+   * tint on those would restore their original opacity and bring them back.
+   */
+  private onHover(point: Vector3 | undefined, event: PointerEvent): void {
+    const document = this.viewer.document;
+    if (!document?.groups || !document.isSegmentable) return;
+
+    let groupId: number | undefined;
+    if (point) {
+      const splatIndex = document.pickSplat(point, document.pickRadius);
+      if (splatIndex >= 0) {
+        const id = document.groupOf(splatIndex);
+        const held = id === this.selectionValue?.groupId;
+        const split = this.layers.some((layer) => layer.groupId === id);
+        if (id !== UNASSIGNED && !held && !split) groupId = id;
+      }
+    }
+    if (groupId === this.hoverValue?.groupId) return;
+
+    if (this.hoverValue) document.restore(this.hoverValue.indices);
+    if (groupId === undefined) {
+      this.hoverValue = undefined;
+    } else {
+      const indices = document.groups.indicesOf(groupId);
+      this.hoverValue = { groupId, indices };
+      document.tint(indices, HOVER, HOVER_STRENGTH);
+    }
+    const info = groupId === undefined ? undefined : document.groups.info(groupId);
+    this.dispatchEvent(
+      new CustomEvent('hover-changed', {
+        detail: { info, x: event.clientX, y: event.clientY },
+      }),
+    );
+  }
+
+  /** Drops the hover tint, e.g. once a click has turned it into a selection. */
+  private clearHover(): void {
+    if (!this.hoverValue) return;
+    this.viewer.document?.restore(this.hoverValue.indices);
+    this.hoverValue = undefined;
+    this.dispatchEvent(new CustomEvent('hover-changed', { detail: {} }));
+  }
+
+  /**
+   * Re-applies the highlight over whatever colours the scene now has. A whole-scene
+   * repaint writes straight over the tint, so the overlay calls this to restore it.
+   */
+  retint(): void {
+    const document = this.viewer.document;
+    const selection = this.selectionValue;
+    if (document && selection) document.tint(selection.indices, HIGHLIGHT, HIGHLIGHT_STRENGTH);
+  }
+
   /** Selects the group owning the splat nearest a surface point. */
   pick(worldPoint: Vector3): void {
     const document = this.viewer.document;
@@ -112,6 +185,7 @@ export class Segments extends EventTarget {
     const document = this.viewer.document;
     if (!document?.groups) return;
 
+    this.clearHover();
     if (this.selectionValue) document.restore(this.selectionValue.indices);
     if (groupId === undefined) {
       this.selectionValue = undefined;
@@ -143,16 +217,21 @@ export class Segments extends EventTarget {
     // the same place whichever segment is selected, and rotation would swing the segment
     // around the scene rather than around itself.
     const centroid = document.centroidOf(selection.indices);
+    const colour = new Color();
     for (let index = 0; index < extracted.numSplats; index += 1) {
       const splat = extracted.getSplat(index);
       splat.center.sub(centroid);
+      // Take the colour from the load-time mirror rather than from the copy. The scan
+      // may be showing label colours, and those are a diagnostic view of an unsegmented
+      // cloud — an object lifted out of it is a real object and shows its own colours.
+      document.baseColour(selection.indices[index]!, colour);
       extracted.setSplat(
         index,
         splat.center,
         splat.scales,
         splat.quaternion,
         splat.opacity,
-        splat.color,
+        colour,
       );
     }
     extracted.needsUpdate = true;
@@ -255,6 +334,7 @@ export class Segments extends EventTarget {
     this.select(undefined);
     document.setGroups(groups);
     this.outcomeValue = 'none';
+    this.dispatchEvent(new Event('groups-changed'));
     this.dispatchEvent(new Event('selection-changed'));
   }
 
@@ -265,6 +345,8 @@ export class Segments extends EventTarget {
     }
     this.layers.length = 0;
     this.selectionValue = undefined;
+    this.hoverValue = undefined;
+    this.dispatchEvent(new Event('groups-changed'));
     this.dispatchEvent(new Event('selection-changed'));
     this.dispatchEvent(new Event('layers-changed'));
   }

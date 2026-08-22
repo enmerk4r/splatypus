@@ -101,6 +101,16 @@ export class GroupMap {
     );
   }
 
+  /**
+   * Fraction of splats that any group claimed. A bake that covers half the scene is not
+   * broken, but it is the single most useful number to put in front of the user, since
+   * every uncovered splat is one that cannot be clicked.
+   */
+  get coverage(): number {
+    if (!this.groupItems) this.buildInverted();
+    return this.ids.length === 0 ? 0 : this.groupItems!.length / this.ids.length;
+  }
+
   /** Splat indices belonging to a group. The inverted index is built once, on demand. */
   indicesOf(groupId: number): Uint32Array {
     if (!this.groupStarts || !this.groupItems) this.buildInverted();

@@ -4,11 +4,13 @@ import { loadGroups, tryLoadSidecar } from './io/loadGroups';
 import { loadSplat, LOD_ABOVE_SPLATS } from './io/loadSplat';
 import type { LoadOptions, SplatSource } from './io/loadSplat';
 import { getInitialSource } from './io/urlParams';
+import { GroupOverlay } from './select/GroupOverlay';
 import { LayerGizmo } from './select/LayerGizmo';
 import { Segments } from './select/Segments';
 import { GroupMapError } from './splats/groups';
 import { Hud } from './ui/hud';
 import { createPanel } from './ui/panel';
+import { createHoverLabel } from './ui/hoverLabel';
 import { createSegmentsPanel } from './ui/segmentsPanel';
 import { wireShortcuts } from './ui/shortcuts';
 import { SplatDocument } from './viewer/SplatDocument';
@@ -53,10 +55,16 @@ async function bootstrap(): Promise<void> {
   const flyHint = element('fly-hint');
   hud.setGpu(viewer.gpuName);
   const segments = new Segments(viewer);
+  const overlay = new GroupOverlay(viewer, segments);
   const gizmo = new LayerGizmo(viewer);
-  const segmentsPanel = createSegmentsPanel(element('segments'), viewer, segments, (layer) =>
-    gizmo.attach(layer),
+  const segmentsPanel = createSegmentsPanel(
+    element('segments'),
+    viewer,
+    segments,
+    overlay,
+    (layer) => gizmo.attach(layer),
   );
+  const hoverLabel = createHoverLabel(element('hover-label'), segments);
   let loadSequence = 0;
 
   const attachGroupsFile = async (file: File): Promise<void> => {
@@ -66,8 +74,7 @@ async function bootstrap(): Promise<void> {
       return;
     }
     try {
-      document.setGroups(await loadGroups({ kind: 'file', file }, document.numSplats));
-      segments.select(undefined);
+      segments.applyGroups(await loadGroups({ kind: 'file', file }, document.numSplats));
       hud.toast(`Loaded ${document.groups?.numGroups ?? 0} groups from ${file.name}.`);
     } catch (error) {
       hud.toast(error instanceof GroupMapError ? error.message : `Couldn't read ${file.name}.`);
@@ -129,10 +136,7 @@ async function bootstrap(): Promise<void> {
         : source.kind === 'url'
           ? await tryLoadSidecar(source.url, document.numSplats, (message) => hud.toast(message))
           : undefined;
-      if (groups && sequence === loadSequence) {
-        document.setGroups(groups);
-        segments.select(undefined);
-      }
+      if (groups && sequence === loadSequence) segments.applyGroups(groups);
     } catch (error) {
       if (sequence !== loadSequence) return;
       const message = error instanceof Error ? error.message : 'The splat could not be opened.';
@@ -214,6 +218,7 @@ async function bootstrap(): Promise<void> {
       disposeShortcuts();
       panel.dispose();
       segmentsPanel.dispose();
+      hoverLabel.dispose();
       gizmo.dispose();
       viewer.dispose();
     },

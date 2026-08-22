@@ -42,6 +42,10 @@ export class Viewer extends EventTarget {
   private lastFrame = performance.now();
   /** Where the pointer went down, so an orbit drag is not mistaken for a click. */
   private pointerDown?: { x: number; y: number; time: number };
+  /** Latest pointer move, coalesced to one hover test per frame. The test raycasts the
+   *  whole cloud, and pointermove fires several times per frame on a trackpad. */
+  private hoverPending?: PointerEvent;
+  private hoverLeft = false;
 
   constructor(canvas: HTMLCanvasElement, frameCallback: (now: number) => void) {
     super();
@@ -74,6 +78,7 @@ export class Viewer extends EventTarget {
       const deltaSeconds = Math.min((now - this.lastFrame) / 1000, 0.1);
       this.lastFrame = now;
       this.cameraRig.update(deltaSeconds);
+      this.flushHover();
       this.renderer.render(this.scene, this.camera);
       frameCallback(now);
     };
@@ -83,6 +88,8 @@ export class Viewer extends EventTarget {
     canvas.addEventListener('dblclick', this.onDoubleClick);
     canvas.addEventListener('pointerdown', this.onPointerDown);
     canvas.addEventListener('pointerup', this.onPointerUp);
+    canvas.addEventListener('pointermove', this.onPointerMove);
+    canvas.addEventListener('pointerleave', this.onPointerLeave);
     this.resize();
     this.camera.position.set(2, 1.2, 2);
     this.camera.lookAt(0, 0, 0);
@@ -189,6 +196,8 @@ export class Viewer extends EventTarget {
     this.canvas.removeEventListener('dblclick', this.onDoubleClick);
     this.canvas.removeEventListener('pointerdown', this.onPointerDown);
     this.canvas.removeEventListener('pointerup', this.onPointerUp);
+    this.canvas.removeEventListener('pointermove', this.onPointerMove);
+    this.canvas.removeEventListener('pointerleave', this.onPointerLeave);
   }
 
   get activeCamera(): PerspectiveCamera {
@@ -278,6 +287,32 @@ export class Viewer extends EventTarget {
     this.pointerDown = { x: event.clientX, y: event.clientY, time: performance.now() };
   };
 
+  private readonly onPointerMove = (event: PointerEvent): void => {
+    // Buttons down means an orbit or a gizmo drag, not a hover.
+    this.hoverPending = event.buttons === 0 ? event : undefined;
+  };
+
+  private readonly onPointerLeave = (): void => {
+    this.hoverPending = undefined;
+    this.hoverLeft = true;
+  };
+
+  /** Runs the pending hover test once per frame, on the frame's own budget. */
+  private flushHover(): void {
+    if (this.hoverLeft && this.lastHover) {
+      this.hoverLeft = false;
+      this.dispatchEvent(new CustomEvent('canvas-hover', { detail: { event: this.lastHover } }));
+    }
+    const event = this.hoverPending;
+    if (!event) return;
+    this.hoverPending = undefined;
+    this.lastHover = event;
+    this.dispatchEvent(
+      new CustomEvent('canvas-hover', { detail: { event, point: this.hitAt(event) } }),
+    );
+  }
+  private lastHover?: PointerEvent;
+
   private readonly onPointerUp = (event: PointerEvent): void => {
     const down = this.pointerDown;
     this.pointerDown = undefined;
@@ -299,6 +334,16 @@ export class Viewer extends EventTarget {
     const raycaster = new Raycaster();
     raycaster.setFromCamera(pointer, this.camera);
     return raycaster;
+  }
+
+  /**
+   * Surface point under the pointer using the raycast alone. `pointAt` falls back to a
+   * nearest-centre search that walks the cloud; this runs every frame, so it does not.
+   */
+  hitAt(event: MouseEvent): Vector3 | undefined {
+    const raycaster = this.raycasterFor(event);
+    if (!raycaster || !this.documentValue) return undefined;
+    return raycaster.intersectObject(this.documentValue.mesh, false)[0]?.point;
   }
 
   /**
