@@ -54,7 +54,7 @@ export class Viewer extends EventTarget {
     this.cameraRig = new CameraRig(this.camera, canvas);
     this.gizmo = new LayerGizmo(this.scene, this.camera, canvas, this.cameraRig);
     this.grid = new GridFloor(this.scene);
-    this.grid.reset(new Vector3(), 1, -1);
+    this.grid.reset(new Vector3(), 1, 0);
 
     this.onFrame = (now): void => {
       const deltaSeconds = Math.min((now - this.lastFrame) / 1000, 0.1);
@@ -94,10 +94,9 @@ export class Viewer extends EventTarget {
     this.applyOrientation();
     this.scene.add(document.root);
     this.gizmo.setDocument(document);
-    document.addEventListener('layers-changed', this.onDocumentGeometryChanged);
-    document.addEventListener('layer-changed', this.onDocumentGeometryChanged);
+    document.addEventListener('layers-changed', this.onLayersChanged);
     const bounds = document.getRobustBounds();
-    this.grid.reset(bounds.center, bounds.radius, bounds.min.y);
+    this.fitGrid(bounds.radius);
     if (frame) this.cameraRig.frame(bounds);
     this.dispatchEvent(new CustomEvent('document-changed', { detail: document }));
   }
@@ -105,8 +104,7 @@ export class Viewer extends EventTarget {
   clearDocument(): void {
     const document = this.documentValue;
     if (!document) return;
-    document.removeEventListener('layers-changed', this.onDocumentGeometryChanged);
-    document.removeEventListener('layer-changed', this.onDocumentGeometryChanged);
+    document.removeEventListener('layers-changed', this.onLayersChanged);
     this.gizmo.setDocument();
     this.scene.remove(document.root);
     document.dispose();
@@ -149,7 +147,7 @@ export class Viewer extends EventTarget {
     if (!this.documentValue) return;
     this.applyOrientation();
     const bounds = this.documentValue.getRobustBounds();
-    this.grid.reset(bounds.center, bounds.radius, bounds.min.y);
+    this.fitGrid(bounds.radius);
     this.cameraRig.frame(bounds);
   }
 
@@ -187,9 +185,14 @@ export class Viewer extends EventTarget {
     root.updateMatrixWorld(true);
   }
 
-  private readonly onDocumentGeometryChanged = (): void => {
-    const bounds = this.documentValue?.getRobustBounds();
-    if (bounds) this.grid.reset(bounds.center, bounds.radius, bounds.min.y);
+  /** The grid is a fixed world reference: always at the origin on y = 0, only its extent follows the scene. */
+  private fitGrid(radius: number): void {
+    this.grid.reset(new Vector3(), radius, 0);
+  }
+
+  // Only structural changes (add/merge/delete) can change the scene extent; moving a layer never moves the grid.
+  private readonly onLayersChanged = (): void => {
+    if (this.documentValue) this.fitGrid(this.documentValue.getRobustBounds().radius);
   };
 
   private readonly resize = (): void => {
