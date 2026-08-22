@@ -112,7 +112,8 @@ Phase 1 is the only hard gate; after that, phases 3–6 are largely parallelizab
 - **Done when:** someone on another laptop opens the Pages URL, drops a `.ply` from their phone scan, and flies around it smoothly.
 
 ### Phase 2 — Data model, layers, export, undo
-- PLY reader into `SplatStore` (worker); compressed PLY / SPZ via Spark loaders → `PackedSplats` → `SplatStore`.
+*Full handoff spec (store-is-truth rationale, exact PLY header, commands, tests, acceptance): [`docs/PHASE2_SPEC.md`](docs/PHASE2_SPEC.md).*
+- Decode files into a CPU `SplatStore` (worker, float32) — **not** from Spark's `PackedSplats`, which is quantised; each layer owns a store and its GPU mesh is rebuilt from it.
 - Layers panel (visibility, lock, rename, delete, merge).
 - `.ply` writer (binary LE, standard 3DGS header; color → `f_dc = (c-0.5)/0.2820948`, opacity → logit, scale → log, quat wxyz; `f_rest` zeros for new splats; dead splats compacted; layer transforms baked in).
 - Round-trip test: export → reload → identical. Open in SuperSplat to confirm.
