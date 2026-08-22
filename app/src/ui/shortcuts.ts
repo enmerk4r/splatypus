@@ -7,6 +7,9 @@ export interface ShortcutActions {
   addFile: () => void;
   exportFile: () => void;
   notify: (message: string, level?: ToastLevel) => void;
+  cancelStroke: () => boolean;
+  adjustSketchSize: (factor: number) => void;
+  adjustSketchOpacity: (delta: number) => void;
 }
 
 export function wireShortcuts(viewer: Viewer, actions: ShortcutActions): () => void {
@@ -47,6 +50,23 @@ export function wireShortcuts(viewer: Viewer, actions: ShortcutActions): () => v
       case 'KeyF':
         viewer.frame();
         break;
+      case 'KeyQ':
+        if (viewer.cameraRig.mode === 'orbit') viewer.setTool('select');
+        break;
+      case 'KeyS':
+        if (viewer.cameraRig.mode === 'orbit') viewer.setTool('sketch');
+        break;
+      case 'KeyX':
+        if (viewer.cameraRig.mode === 'orbit') viewer.setTool('erase');
+        break;
+      case 'BracketLeft':
+      case 'BracketRight': {
+        event.preventDefault();
+        const increase = event.code === 'BracketRight';
+        if (event.shiftKey) actions.adjustSketchOpacity(increase ? 0.1 : -0.1);
+        else actions.adjustSketchSize(increase ? 1.25 : 0.8);
+        break;
+      }
       case 'Tab':
         event.preventDefault();
         viewer.cameraRig.toggleMode();
@@ -68,6 +88,7 @@ export function wireShortcuts(viewer: Viewer, actions: ShortcutActions): () => v
         if (viewer.cameraRig.mode === 'orbit') viewer.setTransformMode('scale');
         break;
       case 'Escape':
+        actions.cancelStroke();
         if (viewer.cameraRig.mode !== 'fly') viewer.document?.setSelection([]);
         break;
       case 'Delete':

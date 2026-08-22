@@ -19,13 +19,14 @@ export function pickLayer(
   document: Document,
   camera: PerspectiveCamera,
   pointer: Vector2,
+  accept: (layer: Layer) => boolean = () => true,
 ): LayerHit | undefined {
   document.root.updateMatrixWorld(true);
   const raycaster = new Raycaster();
   raycaster.setFromCamera(pointer, camera);
   let best: LayerHit | undefined;
   for (const layer of document.layers) {
-    if (!layer.visible) continue;
+    if (!layer.visible || !accept(layer)) continue;
     const hit = raycaster.intersectObject(layer.mesh, false)[0];
     if (hit && (!best || hit.distance < best.distance))
       best = { layer, point: hit.point, distance: hit.distance };
@@ -39,6 +40,7 @@ export function nearestProjectedPoint(
   pointer: Vector2,
   rect: DOMRect,
   maxPixels = 12,
+  accept: (layer: Layer) => boolean = () => true,
 ): LayerHit | undefined {
   document.root.updateMatrixWorld(true);
   const projected = new Vector3();
@@ -46,7 +48,7 @@ export function nearestProjectedPoint(
   let bestPixels = maxPixels;
   let best: LayerHit | undefined;
   for (const layer of document.layers) {
-    if (!layer.visible) continue;
+    if (!layer.visible || !accept(layer)) continue;
     layer.object.updateMatrixWorld(true);
     const stride = Math.max(1, Math.ceil(layer.store.count / 200_000));
     for (let index = 0; index < layer.store.count; index += stride) {

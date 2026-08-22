@@ -259,6 +259,104 @@
   line-height: 1.5;
 }
 
+.sketch-body {
+  display: grid;
+  gap: 10px;
+  padding: 9px 10px 11px;
+}
+
+.sketch-row {
+  display: grid;
+  gap: 5px;
+  color: #aeb8b1;
+}
+
+.sketch-row label {
+  display: flex;
+  justify-content: space-between;
+}
+
+.sketch-row output {
+  color: #e9f0eb;
+}
+
+.sketch-row input[type='range'] {
+  width: 100%;
+  margin: 0;
+  accent-color: var(--lime);
+}
+
+.sketch-buttons {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 3px;
+}
+
+.sketch-buttons button,
+.sketch-colours button {
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 2px;
+  padding: 6px 2px;
+  color: #cbd4ce;
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  font: inherit;
+  font-size: 8px;
+}
+
+.sketch-buttons button[aria-pressed='true'] {
+  border-color: var(--lime);
+  color: var(--lime);
+  background: rgba(184, 243, 74, 0.08);
+}
+
+.sketch-colours {
+  display: grid;
+  grid-template-columns: 28px repeat(6, 1fr);
+  gap: 5px;
+  align-items: center;
+}
+
+.sketch-colours input[type='color'] {
+  width: 28px;
+  height: 24px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.sketch-colours button {
+  height: 18px;
+  padding: 0;
+  border-color: rgba(255, 255, 255, 0.28);
+  background: var(--swatch);
+}
+
+.sketch-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #cbd4ce;
+}
+
+.sketch-toggle input {
+  accent-color: var(--lime);
+}
+
+.sketch-status,
+.sketch-hint {
+  margin: 0;
+  color: #cbd4ce;
+  line-height: 1.45;
+}
+
+.sketch-hint {
+  color: #77827b;
+}
+
 .segment-subhead {
   margin: 4px -10px 0;
   border-top: 1px solid var(--line);

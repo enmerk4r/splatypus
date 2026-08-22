@@ -1,4 +1,12 @@
-import { Color, PerspectiveCamera, Scene, SRGBColorSpace, Vector3, WebGLRenderer } from 'three';
+import {
+  Color,
+  MOUSE,
+  PerspectiveCamera,
+  Scene,
+  SRGBColorSpace,
+  Vector3,
+  WebGLRenderer,
+} from 'three';
 import type { Object3D } from 'three';
 import { SparkRenderer } from '@sparkjsdev/spark';
 import type { Document } from '../model/Document';
@@ -6,12 +14,12 @@ import { CameraRig } from './CameraRig';
 import type { AxisView, CameraMode } from './CameraRig';
 import { LayerGizmo } from './LayerGizmo';
 import type { TransformMode } from './LayerGizmo';
-import { eventPointer, nearestProjectedPoint, pickLayer } from './picking';
-import type { LayerHit } from './picking';
 import { GridFloor } from './GridFloor';
+import { CanvasInteraction } from './CanvasInteraction';
 
 export class WebGLUnavailableError extends Error {}
 export type UpAxis = 'y-down' | 'y-up' | 'z-up';
+export type ToolMode = 'select' | 'sketch' | 'erase';
 
 export class Viewer extends EventTarget {
   readonly cameraRig: CameraRig;
@@ -23,16 +31,13 @@ export class Viewer extends EventTarget {
   private readonly cameraValue = new PerspectiveCamera(60, 1, 0.01, 1000);
   private readonly gizmo: LayerGizmo;
   private readonly grid: GridFloor;
+  private readonly interactions: CanvasInteraction;
   private readonly onFrame: (now: number) => void;
   private documentValue?: Document;
   private upAxisValue: UpAxis = 'y-down';
   private renderScale = 1;
+  private toolValue: ToolMode = 'select';
   private lastFrame = performance.now();
-  private pointerDown?: Vector3;
-  /** Latest pointer move, coalesced to one hover raycast per frame. */
-  private hoverPending?: PointerEvent;
-  private hoverLeft = false;
-  private lastHover?: PointerEvent;
   /** While any guard returns true (e.g. a gizmo is in use) canvas clicks/hovers are ignored. */
   private readonly interactionGuards: (() => boolean)[] = [];
 
@@ -63,22 +68,18 @@ export class Viewer extends EventTarget {
     this.gizmo = new LayerGizmo(this.scene, this.cameraValue, canvas, this.cameraRig);
     this.grid = new GridFloor(this.scene);
     this.grid.reset(new Vector3(), 1, 0);
+    this.interactions = new CanvasInteraction(this, () => this.interacting);
 
     this.onFrame = (now): void => {
       const deltaSeconds = Math.min((now - this.lastFrame) / 1000, 0.1);
       this.lastFrame = now;
       this.cameraRig.update(deltaSeconds);
-      this.flushHover();
+      this.interactions.flushHover();
       this.renderer.render(this.scene, this.cameraValue);
       frameCallback(now);
     };
     window.addEventListener('resize', this.resize);
     document.addEventListener('visibilitychange', this.onVisibilityChange);
-    canvas.addEventListener('dblclick', this.onDoubleClick);
-    canvas.addEventListener('pointerdown', this.onPointerDown);
-    canvas.addEventListener('pointerup', this.onPointerUp);
-    canvas.addEventListener('pointermove', this.onPointerMove);
-    canvas.addEventListener('pointerleave', this.onPointerLeave);
     this.resize();
     this.cameraValue.position.set(2, 1.2, 2);
     this.cameraValue.lookAt(0, 0, 0);
@@ -96,6 +97,22 @@ export class Viewer extends EventTarget {
   }
   get currentRenderScale(): number {
     return this.renderScale;
+  }
+  get tool(): ToolMode {
+    return this.toolValue;
+  }
+
+  setTool(tool: ToolMode): void {
+    if (tool === this.toolValue) return;
+    this.toolValue = tool;
+    const controls = this.cameraRig.controls;
+    controls.mouseButtons.LEFT = tool === 'select' ? MOUSE.ROTATE : null;
+    controls.mouseButtons.MIDDLE = MOUSE.DOLLY;
+    controls.mouseButtons.RIGHT = tool === 'select' ? MOUSE.PAN : MOUSE.ROTATE;
+    this.gizmo.setEnabled(tool === 'select');
+    this.canvas.classList.toggle('tool-crosshair', tool !== 'select');
+    this.interactions.clearHover();
+    this.dispatchEvent(new Event('tool-changed'));
   }
 
   setDocument(document: Document, frame = true): void {
@@ -181,16 +198,12 @@ export class Viewer extends EventTarget {
     this.renderer.setAnimationLoop(null);
     this.clearDocument();
     this.gizmo.dispose();
+    this.interactions.dispose();
     this.cameraRig.dispose();
     this.grid.dispose();
     this.renderer.dispose();
     window.removeEventListener('resize', this.resize);
     document.removeEventListener('visibilitychange', this.onVisibilityChange);
-    this.canvas.removeEventListener('dblclick', this.onDoubleClick);
-    this.canvas.removeEventListener('pointerdown', this.onPointerDown);
-    this.canvas.removeEventListener('pointerup', this.onPointerUp);
-    this.canvas.removeEventListener('pointermove', this.onPointerMove);
-    this.canvas.removeEventListener('pointerleave', this.onPointerLeave);
   }
 
   get camera(): PerspectiveCamera {
@@ -215,7 +228,11 @@ export class Viewer extends EventTarget {
     };
   }
   private get interacting(): boolean {
-    return this.gizmo.isInteracting || this.interactionGuards.some((guard) => guard());
+    return (
+      this.toolValue !== 'select' ||
+      this.gizmo.isInteracting ||
+      this.interactionGuards.some((guard) => guard())
+    );
   }
 
   private applyOrientation(): void {
@@ -251,79 +268,5 @@ export class Viewer extends EventTarget {
       this.lastFrame = performance.now();
       this.renderer.setAnimationLoop(this.onFrame);
     }
-  };
-
-  private readonly onDoubleClick = (event: MouseEvent): void => {
-    const document = this.documentValue;
-    if (!document || this.cameraRig.mode !== 'orbit') return;
-    const rect = this.canvas.getBoundingClientRect();
-    const pointer = eventPointer(event, rect);
-    const hit =
-      pickLayer(document, this.cameraValue, pointer) ??
-      nearestProjectedPoint(document, this.cameraValue, pointer, rect);
-    if (hit) this.cameraRig.retarget(hit.point);
-  };
-
-  private readonly onPointerDown = (event: PointerEvent): void => {
-    this.pointerDown = new Vector3(event.clientX, event.clientY, event.button);
-  };
-
-  private readonly onPointerMove = (event: PointerEvent): void => {
-    // Buttons down means an orbit or gizmo drag, not a hover.
-    this.hoverPending = event.buttons === 0 ? event : undefined;
-  };
-
-  private readonly onPointerLeave = (): void => {
-    this.hoverPending = undefined;
-    this.hoverLeft = true;
-  };
-
-  /** Runs at most one hover raycast per frame and reports it as `canvas-hover` {event, hit?}. */
-  private flushHover(): void {
-    if (this.hoverLeft && this.lastHover) {
-      this.hoverLeft = false;
-      this.dispatchEvent(new CustomEvent('canvas-hover', { detail: { event: this.lastHover } }));
-    }
-    const event = this.hoverPending;
-    if (!event) return;
-    this.hoverPending = undefined;
-    this.lastHover = event;
-    const document = this.documentValue;
-    const hit: LayerHit | undefined =
-      document && this.cameraRig.mode === 'orbit' && !this.interacting
-        ? pickLayer(
-            document,
-            this.cameraValue,
-            eventPointer(event, this.canvas.getBoundingClientRect()),
-          )
-        : undefined;
-    this.dispatchEvent(new CustomEvent('canvas-hover', { detail: { event, hit } }));
-  }
-
-  private readonly onPointerUp = (event: PointerEvent): void => {
-    const start = this.pointerDown;
-    this.pointerDown = undefined;
-    const document = this.documentValue;
-    if (
-      !start ||
-      !document ||
-      event.button !== 0 ||
-      event.ctrlKey ||
-      event.metaKey ||
-      event.shiftKey ||
-      this.cameraRig.mode !== 'orbit' ||
-      this.interacting // a click on a gizmo handle must not change the selection
-    )
-      return;
-    if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 4) return;
-    const rect = this.canvas.getBoundingClientRect();
-    const pointer = eventPointer(event, rect);
-    // Spark's raycast misses sparse point clouds (the ray slips between tiny gaussians), so fall
-    // back to the nearest projected centre within a few pixels — same as double-click retargeting.
-    const hit =
-      pickLayer(document, this.cameraValue, pointer) ??
-      nearestProjectedPoint(document, this.cameraValue, pointer, rect);
-    document.setSelection(hit ? [hit.layer.id] : []);
-    this.dispatchEvent(new CustomEvent('canvas-click', { detail: { event, hit } }));
   };
 }

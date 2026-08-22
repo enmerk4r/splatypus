@@ -150,7 +150,12 @@ export class SplitSplats implements Command {
  */
 export class ScaleSplats implements Command {
   readonly label: string;
-  private snapshot?: { centers: Float32Array; scales: Float32Array; rotations: Float32Array };
+  private snapshot?: {
+    centers: Float32Array;
+    scales: Float32Array;
+    rotations: Float32Array;
+    strokePoints?: Float32Array[];
+  };
   constructor(
     private readonly document: Document,
     private readonly layerId: string,
@@ -171,8 +176,17 @@ export class ScaleSplats implements Command {
       centers: store.centers.slice(),
       scales: store.scales.slice(),
       rotations: store.rotations.slice(),
+      ...(layer.kind === 'sketch'
+        ? { strokePoints: layer.strokes.map((stroke) => stroke.points.slice()) }
+        : {}),
     };
     bakeAnisotropicScale(store, this.factor);
+    for (const stroke of layer.strokes)
+      for (let index = 0; index < stroke.points.length; index += 3) {
+        stroke.points[index] = (stroke.points[index] ?? 0) * this.factor[0];
+        stroke.points[index + 1] = (stroke.points[index + 1] ?? 0) * this.factor[1];
+        stroke.points[index + 2] = (stroke.points[index + 2] ?? 0) * this.factor[2];
+      }
     layer.invalidatePick();
     layer.dirty = true;
     void layer.sync();
@@ -184,6 +198,9 @@ export class ScaleSplats implements Command {
     layer.store.centers.set(this.snapshot.centers);
     layer.store.scales.set(this.snapshot.scales);
     layer.store.rotations.set(this.snapshot.rotations);
+    this.snapshot.strokePoints?.forEach((points, index) =>
+      layer.strokes[index]?.points.set(points),
+    );
     layer.store.invalidateBounds();
     layer.invalidatePick();
     layer.dirty = true;

@@ -1,6 +1,6 @@
 # Splatypus
 
-Splatypus is a local-first Gaussian splat editor built for AECtech 2026 Boston. Open a scan, organise files into layers, move and hide them, and export a standard 3DGS PLY without uploading data to a server.
+Splatypus is a local-first Gaussian splat editor built for AECtech 2026 Boston. Open a scan, organise files into layers, sketch directly on its surfaces or in 3D, and export a standard 3DGS PLY without uploading data to a server.
 
 Splatypus supports standard and compressed `.ply`, `.spz`, `.splat`, `.ksplat`, and `.sog` files through drag-and-drop or the file picker. It can also open CORS-enabled remote files with `?url=<encoded-url>` and bundled gallery entries with `?sample=<name>`. Decoding runs in a worker, and float32 CPU data—not the quantised render texture—is the source of truth.
 
@@ -26,31 +26,50 @@ Quality checks run with `npm run lint` and `npm test`.
 
 ## Controls
 
-| Input | Action |
-| --- | --- |
-| Left drag | Orbit; in fly mode, look around |
-| Right drag | Pan |
-| Scroll | Zoom to cursor; in fly mode, change speed |
-| Double-click | Move the orbit target to the splat surface |
-| `F` | Frame the loaded scene |
-| `Tab` | Toggle orbit/fly mode |
-| `W` `A` `S` `D` | Move in fly mode |
-| `Q` / `E` | Move down/up in fly mode |
-| `Shift` | Fly at 4× speed |
-| `Esc` | Exit fly mode |
-| `G` | Toggle the grid |
-| `O` | Open the file picker |
-| `Shift+O` | Add one or more files as layers |
-| `W` / `E` / `R` | Translate / rotate / uniformly scale the active layer |
-| `Esc` | Clear the layer selection; in fly mode, return to orbit |
-| `Delete` / `Backspace` | Delete selected unlocked layers |
-| `Ctrl/Cmd+Z` | Undo |
-| `Ctrl/Cmd+Shift+Z` or `Ctrl/Cmd+Y` | Redo |
-| `Ctrl/Cmd+E` | Export a standard 3DGS PLY |
-| Click | Select the layer under the cursor — and its group, when the layer is segmented |
-| `1` / `3` / `7` | Front/right/top view |
+| Input                              | Action                                                                               |
+| ---------------------------------- | ------------------------------------------------------------------------------------ |
+| Left drag                          | Orbit in Select; draw/erase in Sketch/Erase; look around in fly mode                 |
+| Right drag                         | Pan in Select; orbit while Sketch/Erase is active                                    |
+| Middle drag                        | Dolly while Sketch/Erase is active                                                   |
+| `Alt`+left drag                    | Orbit while Sketch/Erase is active                                                   |
+| Scroll                             | Zoom to cursor; in fly mode, change speed                                            |
+| Double-click                       | Move the orbit target to the splat surface                                           |
+| `F`                                | Frame the loaded scene                                                               |
+| `Tab`                              | Toggle orbit/fly mode                                                                |
+| `W` `A` `S` `D`                    | Move in fly mode                                                                     |
+| `Q` / `E`                          | Move down/up in fly mode                                                             |
+| `Shift`                            | Fly at 4× speed                                                                      |
+| `Esc`                              | Exit fly mode                                                                        |
+| `G`                                | Toggle the grid                                                                      |
+| `Q` / `S` / `X`                    | Select / Sketch / Erase stroke in orbit mode                                         |
+| `[` / `]`                          | Decrease/increase sketch size                                                        |
+| `Shift`+`[` / `]`                  | Decrease/increase sketch opacity                                                     |
+| `O`                                | Open the file picker                                                                 |
+| `Shift+O`                          | Add one or more files as layers                                                      |
+| `W` / `E` / `R`                    | Translate / rotate / uniformly scale the active layer                                |
+| `Esc`                              | Cancel the active stroke and clear the layer selection; in fly mode, return to orbit |
+| `Delete` / `Backspace`             | Delete selected unlocked layers                                                      |
+| `Ctrl/Cmd+Z`                       | Undo                                                                                 |
+| `Ctrl/Cmd+Shift+Z` or `Ctrl/Cmd+Y` | Redo                                                                                 |
+| `Ctrl/Cmd+E`                       | Export a standard 3DGS PLY                                                           |
+| Click                              | Select the layer under the cursor — and its group, when the layer is segmented       |
+| `1` / `3` / `7`                    | Front/right/top view                                                                 |
 
 Shift-drop adds a single file to the current document. Dropping multiple files always adds each as a layer. An ordinary single-file drop or **Open** replaces the scene after an unsaved-changes guard.
+
+## Sketching
+
+Choose **Sketch** in the bottom toolbar or press `S`, then draw with the left button. The **SKETCH** panel controls the preset, colour, world-space size, opacity, pressure response, and placement:
+
+- **Surface** follows scan hits, bridges small gaps at the last depth, and biases the stroke slightly toward the camera so it remains visible on the scan.
+- **Lock depth** fixes a camera-facing plane at the first hit, which is useful for drawing Tube strokes in empty space.
+- **Plane** draws on the world ground plane (`y = 0`).
+
+**Ink** is a camera-facing ribbon, **Tube** is round and view-independent, **Marker** is wide and translucent, and **Spray** creates deterministic scattered blobs. Mouse input uses full pressure; a pen changes width and opacity when **Pressure** is enabled. Right-drag, middle-drag, or `Alt`+left-drag keeps the camera available while drawing.
+
+The first stroke creates an undoable `Sketch` layer. Later strokes append to the active unlocked sketch layer, or the topmost unlocked sketch layer. Sketch layers use the same visibility, lock, duplicate, merge, delete, solo, floor, transform, undo, and export tools as scan layers. Choose **Erase stroke** or press `X`, then click or drag across strokes; erasing hides each whole vector stroke and is undoable.
+
+PLY export bakes sketch gaussians with their colour, opacity, placement, and layer transform. Re-import preserves their rendered splats, but standard PLY has no vector-stroke metadata, so a re-imported export behaves as a scan rather than retaining stroke-level erase handles.
 
 ## Layers and transforms
 

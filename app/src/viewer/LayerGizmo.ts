@@ -18,6 +18,7 @@ export class LayerGizmo {
   private startScale = new Vector3(1, 1, 1);
   /** Non-uniform factor of the drag in progress (undefined for moves, rotations, uniform scales). */
   private pendingFactor?: Factor3;
+  private enabledValue = true;
 
   constructor(
     scene: Scene,
@@ -51,6 +52,13 @@ export class LayerGizmo {
     return this.controls.getMode() as TransformMode;
   }
 
+  setEnabled(enabled: boolean): void {
+    this.enabledValue = enabled;
+    this.controls.enabled = enabled;
+    this.controls.getHelper().visible = enabled;
+    this.syncAttachment();
+  }
+
   /** True while the pointer is over a gizmo handle or a drag is in progress. */
   get isInteracting(): boolean {
     return this.controls.dragging || this.controls.axis !== null;
@@ -69,7 +77,7 @@ export class LayerGizmo {
   private readonly syncAttachment = (): void => {
     const document = this.document;
     const layer = document?.selection.size === 1 ? document.active() : undefined;
-    if (layer && !layer.locked) this.controls.attach(layer.object);
+    if (this.enabledValue && layer && !layer.locked) this.controls.attach(layer.object);
     else this.controls.detach();
   };
 

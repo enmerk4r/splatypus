@@ -4,6 +4,7 @@ import { SplatMesh } from '@sparkjsdev/spark';
 import type { PointCloudInfo } from '../io/pointCloud';
 import { VoxelGrid } from '../spatial/VoxelGrid';
 import type { GroupMap } from '../splats/groups';
+import type { Stroke } from '../sketch/stroke';
 import { syncLayer } from '../viewer/sync';
 import type { SplatStore } from './SplatStore';
 
@@ -17,6 +18,7 @@ export interface LayerOptions {
   pointCloud?: PointCloudInfo;
   sourceBytes?: ArrayBuffer;
   groups?: GroupMap;
+  strokes?: Stroke[];
   id?: string;
 }
 
@@ -36,6 +38,7 @@ export class Layer extends EventTarget {
   sourceName: string;
   sourceBytes?: ArrayBuffer;
   packedToStore: Uint32Array = new Uint32Array();
+  readonly strokes: Stroke[] = [];
   private storeValue: SplatStore;
   private meshValue = new SplatMesh({ maxSplats: 0 });
   private syncInFlight?: Promise<number>;
@@ -53,6 +56,7 @@ export class Layer extends EventTarget {
     if (options.pointCloud) this.pointCloud = { ...options.pointCloud };
     if (options.sourceBytes) this.sourceBytes = options.sourceBytes;
     if (options.groups) this.setGroups(options.groups);
+    if (options.strokes) this.strokes.push(...options.strokes);
     this.object.name = `Layer: ${this.name}`;
     void this.sync();
   }

@@ -9,12 +9,15 @@ import { getInitialSource } from './io/urlParams';
 import { CropBox } from './select/CropBox';
 import { Segmentation } from './select/Segmentation';
 import { GroupMapError } from './splats/groups';
+import { SketchSettingsStore } from './sketch/settings';
+import { SketchTool } from './sketch/SketchTool';
 import { createExportDialog } from './ui/exportDialog';
 import { createHoverLabel } from './ui/hoverLabel';
 import { Hud } from './ui/hud';
 import { createLayersPanel } from './ui/layersPanel';
 import { createPanel } from './ui/panel';
 import { createSegmentPanel } from './ui/segmentPanel';
+import { createSketchPanel } from './ui/sketchPanel';
 import { createToolbar } from './ui/toolbar';
 import { wireShortcuts } from './ui/shortcuts';
 import { Viewer, WebGLUnavailableError } from './viewer/Viewer';
@@ -58,6 +61,11 @@ async function bootstrap(): Promise<void> {
   const imports = new AppImports(viewer, hud, emptyState);
   const segmentation = new Segmentation(viewer);
   const crop = new CropBox(viewer);
+  const sketchSettings = new SketchSettingsStore();
+  const sketchTool = new SketchTool(viewer, {
+    settings: () => sketchSettings.snapshot(),
+    notify: (message, level) => hud.toast(message, level),
+  });
   viewer.addInteractionGuard(() => crop.isInteracting);
 
   /** Attaches a dropped `.groups` sidecar to the layer segmentation currently targets. */
@@ -141,6 +149,7 @@ async function bootstrap(): Promise<void> {
   const segmentPanel = createSegmentPanel(viewer, segmentation, crop, element('segment-panel'), {
     notify: (message, level) => hud.toast(message, level),
   });
+  const sketchPanel = createSketchPanel(viewer, sketchSettings, element('sketch-panel'));
   const hoverLabel = createHoverLabel(element('hover-label'), segmentation);
   const toolbar = createToolbar(viewer, segmentation, element('toolbar'), {
     notify: (message, level) => hud.toast(message, level),
@@ -167,6 +176,9 @@ async function bootstrap(): Promise<void> {
     openFile: () => openInput.click(),
     addFile: () => addInput.click(),
     exportFile: exportDialog.open,
+    cancelStroke: () => sketchTool.cancelStroke(),
+    adjustSketchSize: (factor) => sketchSettings.adjustRadius(factor),
+    adjustSketchOpacity: (delta) => sketchSettings.adjustOpacity(delta),
     notify: (message, level) => hud.toast(message, level),
   });
 
@@ -215,6 +227,8 @@ async function bootstrap(): Promise<void> {
       imports,
       segmentation,
       crop,
+      sketchTool,
+      sketchSettings,
     };
 
   window.addEventListener('beforeunload', (event) => {
@@ -228,11 +242,13 @@ async function bootstrap(): Promise<void> {
       panel.dispose();
       layersPanel.dispose();
       segmentPanel.dispose();
+      sketchPanel.dispose();
       hoverLabel.dispose();
       toolbar.dispose();
       exportDialog.dispose();
       segmentation.dispose();
       crop.dispose();
+      sketchTool.dispose();
       viewer.dispose();
     },
     { once: true },

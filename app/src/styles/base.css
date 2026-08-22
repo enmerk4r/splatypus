@@ -50,6 +50,10 @@ select:focus-visible {
   touch-action: none;
 }
 
+#viewer.tool-crosshair {
+  cursor: crosshair;
+}
+
 .empty-state {
   position: absolute;
   inset: 50% auto auto 50%;

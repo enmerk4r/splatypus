@@ -7,6 +7,10 @@
  * is a guess for anyone who has not used the tool before.
  */
 const PATHS: Record<string, string> = {
+  select: 'M3 1.5 12.5 9 8.2 9.8 6 14.5Z',
+  pen: 'M3 12.8 4.2 9.3 11.1 2.4a1.4 1.4 0 0 1 2 2L6.2 11.3ZM4.2 9.3l2 2M2 14h5',
+  eraser:
+    'M3 9.5 8.8 3.7a1.5 1.5 0 0 1 2.1 0l2.3 2.3a1.5 1.5 0 0 1 0 2.1L7.3 14H4.8L2.9 12a1.7 1.7 0 0 1 .1-2.5ZM8.5 12.8l-4.3-4.3M8 14h6',
   split: 'M1.5 10v4.5h13V10M8 1.5v9M4.6 5 8 1.5 11.4 5',
   translate:
     'M8 1.5v13M1.5 8h13M8 1.5 5.8 3.7M8 1.5l2.2 2.2M8 14.5l-2.2-2.2M8 14.5l2.2-2.2' +

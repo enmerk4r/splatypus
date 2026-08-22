@@ -6,6 +6,7 @@ import { ArrayLayer, snapToFloorCommand } from '../model/segmentCommands';
 import type { Segmentation } from '../select/Segmentation';
 import type { TransformMode } from '../viewer/LayerGizmo';
 import type { Viewer } from '../viewer/Viewer';
+import type { ToolMode } from '../viewer/Viewer';
 import type { ToastLevel } from './hud';
 import { icon } from './icons';
 
@@ -29,6 +30,12 @@ export function createToolbar(
     `${icon(name)}<span class="sr-only">${label}</span></button>`;
 
   host.innerHTML = `
+    <div class="toolbar-group" role="group" aria-label="Tool mode">
+      ${button('data-tool', 'select', 'Select (Q)', 'select layers and groups')}
+      ${button('data-tool', 'pen', 'Sketch (S)', 'draw gaussian strokes')}
+      ${button('data-tool', 'eraser', 'Erase stroke (X)', 'remove whole sketch strokes')}
+    </div>
+    <div class="toolbar-rule"></div>
     <div class="toolbar-group">
       ${button('data-op', 'split', 'Split to layer', 'lift the selected group out of its layer')}
     </div>
@@ -55,6 +62,7 @@ export function createToolbar(
   const op = (name: string): HTMLButtonElement =>
     host.querySelector<HTMLButtonElement>(`[data-op="${name}"]`)!;
   const modeButtons = [...host.querySelectorAll<HTMLButtonElement>('[data-mode]')];
+  const toolButtons = [...host.querySelectorAll<HTMLButtonElement>('[data-tool]')];
 
   const execute = (action: () => void): void => {
     try {
@@ -102,6 +110,16 @@ export function createToolbar(
         String(modeButton.dataset.mode === viewer.transformMode),
       );
     }
+    const toolNames: Record<string, ToolMode> = {
+      select: 'select',
+      pen: 'sketch',
+      eraser: 'erase',
+    };
+    for (const toolButton of toolButtons)
+      toolButton.setAttribute(
+        'aria-pressed',
+        String(toolNames[toolButton.dataset.tool ?? ''] === viewer.tool),
+      );
   };
 
   const withActive = (run: (document: Document, layer: Layer) => void) => (): void => {
@@ -158,6 +176,12 @@ export function createToolbar(
     modeButton.addEventListener('click', () =>
       viewer.setTransformMode(modeButton.dataset.mode as TransformMode),
     );
+  const toolNames: Record<string, ToolMode> = { select: 'select', pen: 'sketch', eraser: 'erase' };
+  for (const toolButton of toolButtons)
+    toolButton.addEventListener('click', () => {
+      const tool = toolNames[toolButton.dataset.tool ?? ''];
+      if (tool) viewer.setTool(tool);
+    });
 
   let observed = viewer.document;
   const observe = (): void => {
@@ -172,6 +196,7 @@ export function createToolbar(
   };
   viewer.addEventListener('document-changed', observe);
   viewer.addEventListener('transform-mode-changed', render);
+  viewer.addEventListener('tool-changed', render);
   segmentation.addEventListener('selection-changed', render);
   observe();
 
@@ -179,6 +204,7 @@ export function createToolbar(
     dispose: (): void => {
       viewer.removeEventListener('document-changed', observe);
       viewer.removeEventListener('transform-mode-changed', render);
+      viewer.removeEventListener('tool-changed', render);
       segmentation.removeEventListener('selection-changed', render);
       observed?.removeEventListener('layers-changed', render);
       observed?.removeEventListener('layer-changed', render);

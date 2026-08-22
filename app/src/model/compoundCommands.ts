@@ -8,6 +8,7 @@ import { SplatStore } from './SplatStore';
 import type { ShDegree } from './SplatStore';
 import { transformStore } from './storeTransforms';
 import { rescaleLayerInPlace } from '../viewer/sync';
+import { cloneLiveStrokes } from '../sketch/stroke';
 
 export class DuplicateLayer implements Command {
   readonly label: string;
@@ -27,6 +28,9 @@ export class DuplicateLayer implements Command {
       ...(source.pointCloud ? { pointCloud: source.pointCloud } : {}),
       // Source bytes are never mutated, so duplicates can share them instead of copying 100+ MB.
       ...(source.sourceBytes ? { sourceBytes: source.sourceBytes } : {}),
+      ...(source.kind === 'sketch'
+        ? { strokes: cloneLiveStrokes(source.strokes, source.store.alive) }
+        : {}),
     });
     this.duplicate.object.matrix.copy(source.object.matrix);
     this.duplicate.object.matrix.decompose(
