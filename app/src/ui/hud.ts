@@ -1,12 +1,5 @@
+import type { Document } from '../model/Document';
 import type { LoadProgress } from '../io/loadSplat';
-import type { SplatDocument } from '../viewer/SplatDocument';
-
-function formatBytes(bytes: number): string {
-  if (bytes <= 0) return 'size unknown';
-  const units = ['B', 'KB', 'MB', 'GB'];
-  const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-  return `${(bytes / 1024 ** exponent).toFixed(exponent === 0 ? 0 : 1)} ${units[exponent] ?? 'B'}`;
-}
 
 export class Hud {
   private readonly fps: HTMLElement;
@@ -17,6 +10,7 @@ export class Hud {
   private readonly progressTrack: HTMLElement;
   private readonly progressBar: HTMLElement;
   private readonly toastRegion: HTMLElement;
+  private document?: Document;
   private frameCount = 0;
   private sampleStarted = performance.now();
 
@@ -45,23 +39,20 @@ export class Hud {
     this.sampleStarted = now;
   }
 
-  setDocument(document?: SplatDocument): void {
-    const info = document?.pointCloud;
-    this.count.textContent = document
-      ? info && info.stride > 1
-        ? `${document.numSplats.toLocaleString()} of ${info.sourcePoints.toLocaleString()} pts`
-        : `${document.numSplats.toLocaleString()}${document.kind === 'pointcloud' ? ' pts' : ''}`
-      : '—';
-    this.file.textContent = document
-      ? `${document.name} · ${formatBytes(document.byteLength)}`
-      : 'No scene';
-    this.file.title = document?.name ?? '';
+  setDocument(document?: Document): void {
+    this.document?.removeEventListener('layers-changed', this.refreshDocument);
+    this.document?.removeEventListener('layer-changed', this.refreshDocument);
+    this.document?.removeEventListener('history-changed', this.onHistoryChanged);
+    this.document = document;
+    document?.addEventListener('layers-changed', this.refreshDocument);
+    document?.addEventListener('layer-changed', this.refreshDocument);
+    document?.addEventListener('history-changed', this.onHistoryChanged);
+    this.refreshDocument();
   }
 
   setProgress(progress: LoadProgress): void {
     this.progressTrack.hidden = false;
-    const determinate =
-      progress.phase === 'loading' && progress.total !== undefined && progress.total > 0;
+    const determinate = progress.total !== undefined && progress.total > 0;
     this.progressTrack.classList.toggle('indeterminate', !determinate);
     if (determinate) {
       const percentage = Math.min(
@@ -69,7 +60,7 @@ export class Hud {
         Math.round(((progress.loaded ?? 0) / progress.total!) * 100),
       );
       this.progressBar.style.width = `${percentage}%`;
-      this.status.textContent = `Loading ${percentage}%`;
+      this.status.textContent = `${progress.phase === 'parsing' ? 'Parsing' : 'Loading'} ${percentage}%`;
     } else {
       this.progressBar.style.width = '';
       this.status.textContent = progress.phase === 'parsing' ? 'Parsing…' : 'Loading…';
@@ -88,14 +79,60 @@ export class Hud {
   }
 
   toast(message: string): void {
+    const toast = this.makeToast(message);
+    window.setTimeout(() => this.dismiss(toast), 5500);
+  }
+
+  confirm(message: string, actionLabel: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      const toast = this.makeToast(message, true);
+      const actions = document.createElement('div');
+      actions.className = 'toast-actions';
+      const accept = document.createElement('button');
+      accept.type = 'button';
+      accept.textContent = actionLabel;
+      const cancel = document.createElement('button');
+      cancel.type = 'button';
+      cancel.textContent = 'Cancel';
+      actions.append(accept, cancel);
+      toast.append(actions);
+      const finish = (value: boolean): void => {
+        this.dismiss(toast);
+        resolve(value);
+      };
+      accept.addEventListener('click', () => finish(true), { once: true });
+      cancel.addEventListener('click', () => finish(false), { once: true });
+    });
+  }
+
+  private readonly refreshDocument = (): void => {
+    const current = this.document;
+    this.count.textContent = current
+      ? `${current.layers.length} layer${current.layers.length === 1 ? '' : 's'} · ${current.totalLive().toLocaleString()} splats${current.hiddenCount() ? ` (${current.hiddenCount().toLocaleString()} hidden)` : ''}`
+      : '—';
+    this.file.textContent = current?.name ?? 'No scene';
+    this.file.title = current?.name ?? '';
+  };
+
+  private readonly onHistoryChanged = (event: Event): void => {
+    const { action, label } = (event as CustomEvent<{ action: string; label: string }>).detail;
+    if ((action === 'undo' || action === 'redo') && label)
+      this.toast(`${action === 'undo' ? 'Undo' : 'Redo'}: ${label}`);
+  };
+
+  private makeToast(message: string, persistent = false): HTMLElement {
     const toast = document.createElement('div');
-    toast.className = 'toast';
-    toast.textContent = message;
+    toast.className = `toast${persistent ? ' toast-persistent' : ''}`;
+    const text = document.createElement('span');
+    text.textContent = message;
+    toast.append(text);
     this.toastRegion.append(toast);
     requestAnimationFrame(() => toast.classList.add('visible'));
-    window.setTimeout(() => {
-      toast.classList.remove('visible');
-      window.setTimeout(() => toast.remove(), 250);
-    }, 5500);
+    return toast;
+  }
+
+  private dismiss(toast: HTMLElement): void {
+    toast.classList.remove('visible');
+    window.setTimeout(() => toast.remove(), 250);
   }
 }

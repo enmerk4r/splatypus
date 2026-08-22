@@ -19,5 +19,5 @@
     "noUnusedParameters": true,
     "noImplicitOverride": true
   },
-  "include": ["src", "vite.config.ts"]
+  "include": ["src", "tests", "vite.config.ts"]
 }

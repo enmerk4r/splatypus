@@ -32,6 +32,13 @@
       </section>
 
       <input id="file-input" class="sr-only" type="file" accept=".ply,.spz,.splat,.ksplat,.sog" />
+      <input
+        id="add-file-input"
+        class="sr-only"
+        type="file"
+        multiple
+        accept=".ply,.spz,.splat,.ksplat,.sog"
+      />
 
       <aside id="hud" class="hud" aria-live="polite">
         <div class="brand">
@@ -62,14 +69,36 @@
         <div id="progress-track" class="progress-track" hidden>
           <div id="progress-bar" class="progress-bar"></div>
         </div>
+        <button id="export-file" class="hud-export" type="button">EXPORT .PLY</button>
       </aside>
 
-      <div id="panel" class="panel-host"></div>
+      <div class="right-rail">
+        <div id="panel" class="panel-host"></div>
+        <aside id="layers-panel" class="layers-panel" aria-label="Layers" hidden></aside>
+      </div>
       <div id="drag-overlay" class="drag-overlay" hidden>
         <div><strong>Drop to open</strong><span>The current scene will be replaced</span></div>
       </div>
       <div id="toast-region" class="toast-region" aria-live="assertive"></div>
       <div id="fly-hint" class="fly-hint" hidden>FLY · WASD + QE · DRAG TO LOOK · ESC TO EXIT</div>
+      <dialog id="export-dialog" class="export-dialog">
+        <form method="dialog">
+          <header>
+            <span>EXPORT</span>
+            <strong>STANDARD 3DGS PLY</strong>
+          </header>
+          <label><input id="export-hidden" type="checkbox" /> Include hidden layers</label>
+          <label
+            ><input id="export-sh" type="checkbox" checked /> Include spherical harmonics</label
+          >
+          <p id="export-estimate">Estimated size · —</p>
+          <progress id="export-progress" max="1" value="0" hidden></progress>
+          <footer>
+            <button id="export-cancel" type="button">Cancel</button>
+            <button id="export-submit" class="primary" type="submit">Export</button>
+          </footer>
+        </form>
+      </dialog>
       <div id="webgl-error" class="fatal-error" hidden>
         <h1>WebGL 2 is required</h1>
         <p>

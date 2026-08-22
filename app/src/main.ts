@@ -1,12 +1,14 @@
 import './style.css';
+import { AppImports } from './AppImports';
+import type { Document as SplatDocument } from './model/Document';
+import { LockedLayerError, SetPointScale } from './model/commands';
 import { wireFileInput } from './io/dragDrop';
-import { loadSplat, LOD_ABOVE_SPLATS } from './io/loadSplat';
-import type { LoadOptions, SplatSource } from './io/loadSplat';
 import { getInitialSource } from './io/urlParams';
+import { createExportDialog } from './ui/exportDialog';
 import { Hud } from './ui/hud';
+import { createLayersPanel } from './ui/layersPanel';
 import { createPanel } from './ui/panel';
 import { wireShortcuts } from './ui/shortcuts';
-import { SplatDocument } from './viewer/SplatDocument';
 import { Viewer, WebGLUnavailableError } from './viewer/Viewer';
 
 interface Sample {
@@ -28,11 +30,10 @@ async function fetchSamples(): Promise<Sample[]> {
 }
 
 async function bootstrap(): Promise<void> {
-  const canvas = element<HTMLCanvasElement>('viewer');
   const hud = new Hud(element('hud'), element('toast-region'));
   let viewer: Viewer;
   try {
-    viewer = new Viewer(canvas, (now) => hud.tick(now));
+    viewer = new Viewer(element('viewer'), (now) => hud.tick(now));
   } catch (error) {
     if (error instanceof WebGLUnavailableError) {
       element('webgl-error').hidden = false;
@@ -40,85 +41,70 @@ async function bootstrap(): Promise<void> {
     }
     throw error;
   }
-
+  hud.setGpu(viewer.gpuName);
   const emptyState = element('empty-state');
-  const fileInput = element<HTMLInputElement>('file-input');
-  const openButton = element<HTMLButtonElement>('open-file');
+  const openInput = element<HTMLInputElement>('file-input');
+  const addInput = element<HTMLInputElement>('add-file-input');
   const sampleSelect = element<HTMLSelectElement>('sample-select');
   const flyHint = element('fly-hint');
-  hud.setGpu(viewer.gpuName);
-  let loadSequence = 0;
+  const imports = new AppImports(viewer, hud, emptyState);
 
-  const openSource = async (source: SplatSource, options: LoadOptions = {}): Promise<void> => {
-    const sequence = ++loadSequence;
-    viewer.clearDocument();
-    hud.setDocument();
-    emptyState.classList.add('loading');
-    hud.setProgress({ phase: 'loading' });
+  const execute = (action: () => void): boolean => {
     try {
-      const loaded = await loadSplat(
-        source,
-        (progress) => {
-          if (sequence === loadSequence) hud.setProgress(progress);
-        },
-        options,
-      );
-      if (sequence !== loadSequence) {
-        loaded.mesh.dispose();
-        return;
-      }
-      const document = new SplatDocument(loaded.mesh, loaded.name, loaded.byteLength, loaded.kind, {
-        ...(loaded.bytes ? { bytes: loaded.bytes } : {}),
-        ...(loaded.pointCloud ? { pointCloud: loaded.pointCloud } : {}),
-      });
-      viewer.setDocument(document);
-      hud.setDocument(document);
-      hud.setReady();
-      emptyState.hidden = true;
-      const info = loaded.pointCloud;
-      if (info && info.stride > 1) {
-        hud.toast(
-          `RGB point cloud: showing ${info.keptPoints.toLocaleString()} of ${info.sourcePoints.toLocaleString()} points (every ${info.stride}th). Raise the budget in VIEW › Point cloud.`,
-        );
-      } else if (info) {
-        hud.toast('RGB point cloud (not a Gaussian splat): point size estimated from spacing.');
-      } else if (loaded.mesh.numSplats >= LOD_ABOVE_SPLATS) {
-        hud.toast('Large scene: rendering with a level-of-detail tree built at load time.');
-      }
+      action();
+      return true;
     } catch (error) {
-      if (sequence !== loadSequence) return;
-      const message = error instanceof Error ? error.message : 'The splat could not be opened.';
-      console.error(error);
-      hud.setError();
-      hud.toast(message);
-      emptyState.hidden = false;
-    } finally {
-      if (sequence === loadSequence) emptyState.classList.remove('loading');
+      hud.toast(error instanceof LockedLayerError ? error.message : 'That action failed.');
+      if (!(error instanceof LockedLayerError)) console.error(error);
+      return false;
     }
   };
-
   const panel = createPanel(viewer, element('panel'), {
-    onPointBudgetChange: (pointBudget) => {
-      const current = viewer.document;
-      if (!current?.bytes) return;
-      void openSource(
-        { kind: 'bytes', bytes: current.bytes, fileName: current.name },
-        {
-          pointBudget,
-          ...(current.pointSizeMul !== undefined ? { pointSizeMul: current.pointSizeMul } : {}),
-        },
-      );
+    onPointScaleChange: (layer, scale) => {
+      const model = viewer.document;
+      if (!model || !layer.pointCloud) return;
+      if (
+        execute(() =>
+          model.history.push(
+            new SetPointScale(model, layer.id, layer.pointCloud!.pointScale, scale),
+          ),
+        )
+      )
+        void layer.sync();
     },
+    onPointBudgetChange: (layer, budget) => void imports.changePointBudget(layer.id, budget),
   });
-
-  const disposeDrop = wireFileInput(
-    fileInput,
-    openButton,
-    element('drag-overlay'),
-    (file) => void openSource({ kind: 'file', file }),
+  const layersPanel = createLayersPanel(viewer, element('layers-panel'), {
+    onAdd: () => addInput.click(),
+    onError: (message) => hud.toast(message),
+  });
+  const exportDialog = createExportDialog(
+    element<HTMLDialogElement>('export-dialog'),
+    element<HTMLButtonElement>('export-file'),
+    () => viewer.document,
     (message) => hud.toast(message),
   );
-  const disposeShortcuts = wireShortcuts(viewer, () => fileInput.click());
+  const disposeDrop = wireFileInput(
+    openInput,
+    addInput,
+    element('open-file'),
+    element('drag-overlay'),
+    {
+      onOpen: (file) => void imports.open({ kind: 'file', file }),
+      onAdd: (files) => void imports.add(files),
+      onError: (message) => hud.toast(message),
+    },
+  );
+  const disposeShortcuts = wireShortcuts(viewer, {
+    openFile: () => openInput.click(),
+    addFile: () => addInput.click(),
+    exportFile: exportDialog.open,
+    onError: (message) => hud.toast(message),
+  });
+
+  viewer.addEventListener('document-changed', (event) => {
+    hud.setDocument((event as CustomEvent<SplatDocument | undefined>).detail);
+  });
   const updateFlyHint = (): void => {
     flyHint.hidden = viewer.cameraRig.mode !== 'fly';
   };
@@ -138,32 +124,33 @@ async function bootstrap(): Promise<void> {
     console.error(error);
     hud.toast('The sample gallery is unavailable. You can still open a local file.');
   }
-
   sampleSelect.addEventListener('change', () => {
     const sample = samples.find((candidate) => candidate.name === sampleSelect.value);
-    if (sample) void openSource({ kind: 'url', url: sample.url, name: sample.name });
+    if (sample) void imports.open({ kind: 'url', url: sample.url, name: sample.name });
   });
-
   const initial = getInitialSource();
-  if (initial.url) {
-    void openSource({ kind: 'url', url: initial.url });
-  } else if (initial.sample) {
-    const initialSample = initial.sample.toLowerCase();
-    const sample = samples.find((candidate) => candidate.name.toLowerCase() === initialSample);
+  if (initial.url) void imports.open({ kind: 'url', url: initial.url });
+  else if (initial.sample) {
+    const sample = samples.find(
+      (candidate) => candidate.name.toLowerCase() === initial.sample!.toLowerCase(),
+    );
     if (sample) {
       sampleSelect.value = sample.name;
-      void openSource({ kind: 'url', url: sample.url, name: sample.name });
-    } else {
-      hud.toast(`Unknown sample “${initial.sample}”.`);
-    }
+      void imports.open({ kind: 'url', url: sample.url, name: sample.name });
+    } else hud.toast(`Unknown sample “${initial.sample}”.`);
   }
 
+  window.addEventListener('beforeunload', (event) => {
+    if (viewer.document?.history.canUndo()) event.preventDefault();
+  });
   window.addEventListener(
-    'beforeunload',
+    'pagehide',
     () => {
       disposeDrop();
       disposeShortcuts();
       panel.dispose();
+      layersPanel.dispose();
+      exportDialog.dispose();
       viewer.dispose();
     },
     { once: true },

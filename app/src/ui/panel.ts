@@ -1,7 +1,7 @@
 import { Pane } from 'tweakpane';
+import type { Layer } from '../model/Layer';
 import { DEFAULT_POINT_BUDGET } from '../io/pointCloud';
 import type { CameraMode } from '../viewer/CameraRig';
-import type { SplatDocument } from '../viewer/SplatDocument';
 import type { UpAxis, Viewer } from '../viewer/Viewer';
 
 interface PanelSettings {
@@ -18,8 +18,8 @@ interface PanelSettings {
 }
 
 export interface PanelCallbacks {
-  /** Re-open the current point cloud with a new budget (requires a re-parse). */
-  onPointBudgetChange: (budget: number) => void;
+  onPointScaleChange: (layer: Layer, scale: number) => void;
+  onPointBudgetChange: (layer: Layer, budget: number) => void;
 }
 
 export function createPanel(
@@ -40,7 +40,6 @@ export function createPanel(
     pointBudgetM: DEFAULT_POINT_BUDGET / 1e6,
   };
   const pane = new Pane({ title: 'VIEW', expanded: false, container });
-
   pane
     .addBinding(settings, 'background', { label: 'Background', view: 'color' })
     .on('change', (event) => viewer.setBackground(event.value));
@@ -77,56 +76,62 @@ export function createPanel(
     });
 
   const points = pane.addFolder({ title: 'Point cloud', expanded: true });
-  // Relative to the spacing-based estimate so one slider range fits every scene scale.
   points
     .addBinding(settings, 'pointSizeMul', { label: 'Point size ×', min: 0.1, max: 8, step: 0.05 })
     .on('change', (event) => {
-      const document = viewer.document;
-      if (event.last && document?.pointCloud)
-        document.setPointScale(document.pointCloud.basePointScale * event.value);
+      const layer = viewer.document?.active();
+      if (event.last && layer?.pointCloud)
+        callbacks.onPointScaleChange(layer, layer.pointCloud.basePointScale * event.value);
     });
-  const pointBudgetBinding = points.addBinding(settings, 'pointBudgetM', {
-    label: 'Budget (M pts)',
-    min: 0.25,
-    max: 12,
-    step: 0.25,
-  });
-  pointBudgetBinding.on('change', (event) => {
-    if (event.last) callbacks.onPointBudgetChange(Math.round(event.value * 1e6));
-  });
+  points
+    .addBinding(settings, 'pointBudgetM', {
+      label: 'Budget (M pts)',
+      min: 0.25,
+      max: 12,
+      step: 0.25,
+    })
+    .on('change', (event) => {
+      const layer = viewer.document?.active();
+      if (event.last && layer?.pointCloud)
+        callbacks.onPointBudgetChange(layer, Math.round(event.value * 1e6));
+    });
 
-  const syncDocument = (document?: SplatDocument): void => {
-    const isPointCloud = document?.kind === 'pointcloud';
-    points.hidden = !isPointCloud;
-    settings.upAxis = viewer.upAxis;
-    if (isPointCloud && document.pointCloud) {
-      const { pointScale, basePointScale } = document.pointCloud;
-      settings.pointSizeMul = basePointScale > 0 ? pointScale / basePointScale : 1;
-    }
-    pane.refresh();
-  };
-
+  let observed = viewer.document;
   const sync = (): void => {
+    const document = viewer.document;
+    if (document !== observed) {
+      observed?.removeEventListener('selection-changed', sync);
+      observed?.removeEventListener('layer-changed', sync);
+      observed = document;
+      observed?.addEventListener('selection-changed', sync);
+      observed?.addEventListener('layer-changed', sync);
+    }
+    const info = document?.active()?.pointCloud;
+    points.hidden = !info;
     settings.grid = viewer.isGridVisible;
     settings.upAxis = viewer.upAxis;
     settings.cameraMode = viewer.cameraRig.mode;
     settings.flySpeed = viewer.cameraRig.flySpeed;
     settings.renderScale = viewer.currentRenderScale;
+    if (info) {
+      settings.pointSizeMul = info.basePointScale > 0 ? info.pointScale / info.basePointScale : 1;
+      settings.pointBudgetM = info.pointBudget / 1e6;
+    }
     pane.refresh();
   };
-  const onDocumentChanged = (event: Event): void =>
-    syncDocument((event as CustomEvent<SplatDocument | undefined>).detail);
   viewer.addEventListener('settings-changed', sync);
-  viewer.addEventListener('document-changed', onDocumentChanged);
+  viewer.addEventListener('document-changed', sync);
   viewer.cameraRig.addEventListener('mode-changed', sync);
   viewer.cameraRig.addEventListener('speed-changed', sync);
-  syncDocument(viewer.document);
+  sync();
 
   return {
     refresh: sync,
     dispose: (): void => {
+      observed?.removeEventListener('selection-changed', sync);
+      observed?.removeEventListener('layer-changed', sync);
       viewer.removeEventListener('settings-changed', sync);
-      viewer.removeEventListener('document-changed', onDocumentChanged);
+      viewer.removeEventListener('document-changed', sync);
       viewer.cameraRig.removeEventListener('mode-changed', sync);
       viewer.cameraRig.removeEventListener('speed-changed', sync);
       pane.dispose();

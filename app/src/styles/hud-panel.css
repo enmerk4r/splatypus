@@ -72,6 +72,24 @@
   animation: progress 1s ease-in-out infinite;
 }
 
+.hud-export {
+  width: 100%;
+  margin-top: 11px;
+  border: 1px solid rgba(184, 243, 74, 0.45);
+  border-radius: 3px;
+  padding: 7px 9px;
+  color: var(--lime);
+  background: rgba(184, 243, 74, 0.06);
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+}
+
+.hud-export:hover {
+  background: rgba(184, 243, 74, 0.12);
+}
+
 @keyframes progress {
   from {
     transform: translateX(-110%);
@@ -92,10 +110,6 @@
   --tp-label-foreground-color: hsla(130, 7%, 68%, 1);
   --tp-monitor-background-color: hsla(0, 0%, 0%, 0.25);
   --tp-monitor-foreground-color: hsla(120, 12%, 92%, 1);
-  position: absolute;
-  top: 18px;
-  right: 18px;
-  z-index: 4;
   width: 260px;
   backdrop-filter: blur(18px);
 }

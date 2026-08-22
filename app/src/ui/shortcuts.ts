@@ -1,6 +1,22 @@
+import { LockedLayerError, RemoveLayers } from '../model/commands';
 import type { Viewer } from '../viewer/Viewer';
 
-export function wireShortcuts(viewer: Viewer, openFile: () => void): () => void {
+export interface ShortcutActions {
+  openFile: () => void;
+  addFile: () => void;
+  exportFile: () => void;
+  onError: (message: string) => void;
+}
+
+export function wireShortcuts(viewer: Viewer, actions: ShortcutActions): () => void {
+  const execute = (action: () => void): void => {
+    try {
+      action();
+    } catch (error) {
+      actions.onError(error instanceof LockedLayerError ? error.message : 'That action failed.');
+      if (!(error instanceof LockedLayerError)) console.error(error);
+    }
+  };
   const onKeyDown = (event: KeyboardEvent): void => {
     const target = event.target;
     if (
@@ -9,8 +25,22 @@ export function wireShortcuts(viewer: Viewer, openFile: () => void): () => void 
       target instanceof HTMLTextAreaElement
     )
       return;
-    if (event.ctrlKey || event.metaKey || event.altKey) return;
-
+    const command = event.ctrlKey || event.metaKey;
+    if (command && !event.altKey) {
+      const history = viewer.document?.history;
+      if (event.code === 'KeyZ') {
+        event.preventDefault();
+        execute(() => (event.shiftKey ? history?.redo() : history?.undo()));
+      } else if (event.code === 'KeyY') {
+        event.preventDefault();
+        execute(() => history?.redo());
+      } else if (event.code === 'KeyE') {
+        event.preventDefault();
+        actions.exportFile();
+      }
+      return;
+    }
+    if (event.altKey) return;
     switch (event.code) {
       case 'KeyF':
         viewer.frame();
@@ -23,8 +53,29 @@ export function wireShortcuts(viewer: Viewer, openFile: () => void): () => void 
         viewer.toggleGrid();
         break;
       case 'KeyO':
-        openFile();
+        if (event.shiftKey) actions.addFile();
+        else actions.openFile();
         break;
+      case 'KeyW':
+        if (viewer.cameraRig.mode === 'orbit') viewer.setTransformMode('translate');
+        break;
+      case 'KeyE':
+        if (viewer.cameraRig.mode === 'orbit') viewer.setTransformMode('rotate');
+        break;
+      case 'KeyR':
+        if (viewer.cameraRig.mode === 'orbit') viewer.setTransformMode('scale');
+        break;
+      case 'Escape':
+        if (viewer.cameraRig.mode !== 'fly') viewer.document?.setSelection([]);
+        break;
+      case 'Delete':
+      case 'Backspace': {
+        const document = viewer.document;
+        if (!document || document.selection.size === 0) break;
+        event.preventDefault();
+        execute(() => document.history.push(new RemoveLayers(document, [...document.selection])));
+        break;
+      }
       case 'Digit1':
       case 'Numpad1':
         viewer.setView('front');

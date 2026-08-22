@@ -1,0 +1,211 @@
+.right-rail {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 5;
+  display: grid;
+  width: 260px;
+  max-height: calc(100vh - 36px);
+  gap: 10px;
+  overflow: auto;
+}
+
+.right-rail .panel-host {
+  width: 100%;
+}
+
+.layers-panel {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel);
+  box-shadow: 0 12px 38px rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(18px);
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-size: 9px;
+}
+
+.layers-header,
+.layers-footer {
+  padding: 10px 11px;
+  color: #8e9992;
+  letter-spacing: 0.12em;
+}
+
+.layers-header {
+  border-bottom: 1px solid var(--line);
+  color: #e9f0eb;
+  font-weight: 800;
+}
+
+.layers-list {
+  max-height: min(42vh, 420px);
+  overflow: auto;
+}
+
+.layer-row {
+  display: grid;
+  grid-template-columns: 22px 22px 8px minmax(0, 1fr) 34px 8px;
+  min-height: 34px;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+  cursor: default;
+}
+
+.layer-row:hover,
+.layer-row.selected {
+  background: rgba(184, 243, 74, 0.08);
+}
+
+.layer-row.selected {
+  box-shadow: inset 2px 0 var(--lime);
+}
+
+.layer-row.locked .layer-name {
+  color: #8b948e;
+}
+
+.layer-icon {
+  border: 0;
+  padding: 4px;
+  color: #aeb8b1;
+  background: transparent;
+  cursor: pointer;
+  font-size: 9px;
+}
+
+.layer-tag {
+  width: 6px;
+  height: 6px;
+  border-radius: 1px;
+}
+
+.layer-name,
+.layer-count {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.layer-count {
+  color: #737e77;
+  text-align: right;
+}
+
+.layer-sh {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.layer-sh.present {
+  background: var(--lime);
+  box-shadow: 0 0 5px rgba(184, 243, 74, 0.5);
+}
+
+.layer-name-input {
+  min-width: 0;
+  border: 1px solid var(--lime);
+  padding: 4px;
+  color: #eef4ef;
+  background: #121712;
+  font: inherit;
+}
+
+.layers-toolbar {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 3px;
+  padding: 7px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.layers-toolbar button {
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 2px;
+  padding: 5px 2px;
+  color: #cbd4ce;
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  font-size: 8px;
+}
+
+.layers-toolbar button:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
+.export-dialog {
+  width: min(420px, calc(100vw - 32px));
+  border: 1px solid rgba(184, 243, 74, 0.35);
+  border-radius: 6px;
+  padding: 0;
+  color: #edf3ef;
+  background: rgba(15, 18, 17, 0.97);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.55);
+  font-family: 'SFMono-Regular', Consolas, monospace;
+}
+
+.export-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.56);
+  backdrop-filter: blur(5px);
+}
+
+.export-dialog form {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+}
+
+.export-dialog header {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.export-dialog header span,
+.export-dialog p {
+  margin: 0;
+  color: #7c8780;
+  font-size: 9px;
+  letter-spacing: 0.11em;
+}
+
+.export-dialog label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 11px;
+}
+
+.export-dialog progress {
+  width: 100%;
+  accent-color: var(--lime);
+}
+
+.export-dialog footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.export-dialog footer button {
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 0 14px;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+}
+
+.export-dialog footer .primary {
+  border-color: var(--lime);
+  color: #11150f;
+  background: var(--lime);
+}

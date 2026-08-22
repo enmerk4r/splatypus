@@ -48,6 +48,27 @@
   font-size: 13px;
 }
 
+.toast-persistent {
+  border-color: rgba(184, 243, 74, 0.45);
+  color: #eef4ef;
+  background: rgba(18, 27, 16, 0.96);
+}
+
+.toast-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.toast-actions button {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+  padding: 6px 10px;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+}
+
 .toast.visible {
   opacity: 1;
   transform: translateY(0);
@@ -91,7 +112,7 @@
 }
 
 @media (max-width: 680px) {
-  .panel-host {
+  .right-rail {
     top: auto;
     right: 12px;
     bottom: 12px;
