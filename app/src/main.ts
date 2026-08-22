@@ -14,6 +14,7 @@ import { createPanel } from './ui/panel';
 import { createHoverLabel } from './ui/hoverLabel';
 import { createInspector } from './ui/inspector';
 import { createLibraryPanel } from './ui/libraryPanel';
+import { createSegmentPanel } from './ui/segmentPanel';
 import { wireCollapse } from './ui/collapse';
 import { createToolbar } from './ui/toolbar';
 import { wireShortcuts } from './ui/shortcuts';
@@ -99,10 +100,11 @@ async function bootstrap(): Promise<void> {
     sampleSelect.value = '';
   };
 
-  const libraryPanel = createLibraryPanel(element('library-body'), viewer, segments, overlay, {
+  const libraryPanel = createLibraryPanel(element('library-body'), viewer, {
     onOpenFile: () => fileInput.click(),
     onExport: exportScene,
   });
+  const segmentPanel = createSegmentPanel(element('segment-controls'), viewer, segments, overlay);
   const collapses = [
     wireCollapse(element('hud'), element('hud-collapse'), element('hud-body')),
     wireCollapse(element('library'), element('library-collapse'), element('library-body')),
@@ -279,6 +281,7 @@ async function bootstrap(): Promise<void> {
       disposeShortcuts();
       panel.dispose();
       libraryPanel.dispose();
+      segmentPanel.dispose();
       for (const collapse of collapses) collapse.dispose();
       inspector.dispose();
       toolbar.dispose();

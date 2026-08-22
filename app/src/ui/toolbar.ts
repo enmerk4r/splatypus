@@ -21,6 +21,10 @@ export function createToolbar(
     `${icon(name)}<span class="sr-only">${label}</span></button>`;
 
   host.innerHTML = `
+    <div class="toolbar-group">
+      ${button('data-op', 'split', 'Split to object', 'lift the selected group out of the scan')}
+    </div>
+    <div class="toolbar-rule"></div>
     <div class="toolbar-group" role="group" aria-label="Transform mode">
       ${button('data-mode', 'translate', 'Move', 'drag the object')}
       ${button('data-mode', 'rotate', 'Rotate', 'spin it in place')}
@@ -48,6 +52,11 @@ export function createToolbar(
 
   const render = (): void => {
     const active = segments.activeLayer;
+    const selection = segments.selection;
+    // Splitting needs a group selected in the scan that has not already been lifted out.
+    op('split').disabled =
+      selection === undefined ||
+      segments.allLayers().some((layer) => layer.groupId === selection.groupId);
     for (const name of ['duplicate', 'array', 'floor', 'merge', 'delete']) {
       op(name).disabled = active === undefined;
     }
@@ -73,6 +82,7 @@ export function createToolbar(
     };
 
   const handlers: Record<string, () => void> = {
+    split: (): void => void segments.splitSelection(),
     duplicate: withActive((layer) => segments.activate(segments.duplicate(layer))),
     array: withActive((layer) => void segments.arrayCopies(layer, 4)),
     group: (): void => void segments.groupTicked(),
@@ -94,12 +104,14 @@ export function createToolbar(
 
   segments.addEventListener('layers-changed', render);
   segments.addEventListener('active-changed', render);
+  segments.addEventListener('selection-changed', render);
   render();
 
   return {
     dispose: (): void => {
       segments.removeEventListener('layers-changed', render);
       segments.removeEventListener('active-changed', render);
+      segments.removeEventListener('selection-changed', render);
     },
   };
 }

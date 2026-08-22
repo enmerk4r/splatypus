@@ -240,13 +240,13 @@
   cursor: default;
 }
 
-.library button[aria-pressed='true'],
+.inspector button[aria-pressed='true'],
 .toolbar button[aria-pressed='true'] {
   border-color: var(--lime);
   color: var(--lime);
 }
 
-.library select,
+.inspector select,
 .inspector input[type='text'],
 .inspector input[type='number'] {
   min-width: 0;
@@ -258,14 +258,14 @@
   font: inherit;
 }
 
-.library input[type='range'] {
+.inspector input[type='range'] {
   width: 100%;
   min-width: 0;
   accent-color: var(--lime);
 }
 
-.library input:disabled,
-.library select:disabled {
+.inspector input:disabled,
+.inspector select:disabled {
   opacity: 0.4;
 }
 
@@ -285,22 +285,14 @@
   width: auto;
 }
 
-.library-file,
-.library-actions {
+.library-file {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
-}
-
-.library-actions {
-  margin-top: 10px;
-}
-
-.library-file {
   margin-bottom: 8px;
 }
 
-.library-bake {
+.segment-grid {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
@@ -308,13 +300,31 @@
   margin-bottom: 10px;
 }
 
-.library-bake label {
+.segment-grid label {
   color: #77817b;
 }
 
-.library-bake select,
-.library-bake > button {
+.segment-grid select,
+.segment-grid > button {
   grid-column: 1 / -1;
+}
+
+.segment-clear {
+  width: 100%;
+  margin-top: 8px;
+}
+
+/* The segment section is a sibling of the settings pane, not part of it. */
+#segment-controls {
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+#segment-controls .panel-title {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
 }
 
 /* ---- right: the object, and the viewport ------------------------------ */

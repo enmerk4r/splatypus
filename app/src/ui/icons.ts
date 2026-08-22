@@ -7,6 +7,7 @@
  * is a guess for anyone who has not used the tool before.
  */
 const PATHS: Record<string, string> = {
+  split: 'M1.5 10v4.5h13V10M8 1.5v9M4.6 5 8 1.5 11.4 5',
   translate:
     'M8 1.5v13M1.5 8h13M8 1.5 5.8 3.7M8 1.5l2.2 2.2M8 14.5l-2.2-2.2M8 14.5l2.2-2.2' +
     'M1.5 8l2.2-2.2M1.5 8l2.2 2.2M14.5 8l-2.2-2.2M14.5 8l2.2 2.2',
