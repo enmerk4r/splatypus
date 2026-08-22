@@ -2,6 +2,8 @@ import type { Document } from '../model/Document';
 import type { ToastLevel } from './hud';
 import { exportPly } from '../io/exportPly';
 import { estimateGaussianPlyBytes } from '../io/plyWriter';
+import { SplatStore } from '../model/SplatStore';
+import { defaultSplatSpacing, meshToSplats } from '../mesh/solid';
 import { prepareSaveFile } from '../io/saveFile';
 import { writeProject } from '../io/projectFormat';
 import type { ProjectViewState } from '../io/projectFormat';
@@ -44,7 +46,13 @@ export function createExportDialog(
   const layersForEstimate = (document: Document) =>
     document.layers.map((layer) => {
       layer.object.updateMatrix();
-      return { store: layer.store, matrix: layer.object.matrix.toArray(), visible: layer.visible };
+      return {
+        store: layer.solid
+          ? new SplatStore(meshToSplats(layer.solid, defaultSplatSpacing(layer.solid)))
+          : layer.store,
+        matrix: layer.object.matrix.toArray(),
+        visible: layer.visible,
+      };
     });
   const refresh = (): void => {
     const document = getDocument();

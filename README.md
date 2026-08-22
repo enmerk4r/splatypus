@@ -128,6 +128,16 @@ their distance — then type the real distance and **Scale layer**: the layer is
 about the first point so the two points are that far apart (one undoable transform). Use it to
 bring phone scans, point clouds and imported objects to true size before sketching or measuring.
 
+## Mesh layers (polyline → extrude)
+
+Press `P`, click an outline on a horizontal plane (its height comes from the surface under the
+first click, else the grid; segment lengths are shown live, Shift snaps to 45°, Backspace undoes
+a point), close with Enter / double-click / a click on the first point, then type a height: a
+capped mesh in the SKETCH colour becomes a **mesh layer** — moved, rotated, scaled (non-uniformly
+too), duplicated, hidden, soloed and undone like any layer, and click-selectable. Meshes are
+stored as meshes in the Splatypus project and sampled into flat gaussians when you export a PLY
+or merge into a splat layer. Details: [docs/MESH_NOTES.md](docs/MESH_NOTES.md).
+
 ## Export
 
 Use **EXPORT** in the HUD or `Ctrl/Cmd+E`. Choose **Export Project** to write an editable `.splatypus` project containing the layer stack, transforms, visibility and lock state, live/deleted splats, segmentation groups, sketch strokes, selection, and camera/view state. Opening that file restores the editing workspace; undo/redo history starts empty.

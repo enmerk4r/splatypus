@@ -1,4 +1,6 @@
 import type { Layer } from '../model/Layer';
+import { SplatStore } from '../model/SplatStore';
+import { defaultSplatSpacing, meshToSplats } from '../mesh/solid';
 import type { PlyWriteOptions } from './plyWriter';
 
 interface ExportMessage {
@@ -36,17 +38,21 @@ export function exportPly(
       id: 1,
       layers: layers.map((layer) => {
         layer.object.updateMatrix();
+        // Mesh layers have no splats of their own: sample their surface for the PLY.
+        const store = layer.solid
+          ? new SplatStore(meshToSplats(layer.solid, defaultSplatSpacing(layer.solid)))
+          : layer.store;
         return {
           store: {
-            count: layer.store.count,
-            alive: layer.store.alive,
-            centers: layer.store.centers,
-            scales: layer.store.scales,
-            rotations: layer.store.rotations,
-            opacities: layer.store.opacities,
-            colors: layer.store.colors,
-            shDegree: layer.store.shDegree,
-            ...(layer.store.shRest ? { shRest: layer.store.shRest } : {}),
+            count: store.count,
+            alive: store.alive,
+            centers: store.centers,
+            scales: store.scales,
+            rotations: store.rotations,
+            opacities: store.opacities,
+            colors: store.colors,
+            shDegree: store.shDegree,
+            ...(store.shRest ? { shRest: store.shRest } : {}),
           },
           matrix: layer.object.matrix.toArray(),
           visible: layer.visible,

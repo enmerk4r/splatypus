@@ -62,6 +62,10 @@ export function createToolbar(
       ${button('data-tool', 'measure', 'Measure / scale to reference (M)', 'pick two points on the active layer, type the real distance, the layer is scaled to match')}
     </div>
     <div class="toolbar-rule"></div>
+    <div class="toolbar-group" role="group" aria-label="Modelling">
+      ${button('data-tool', 'polyline', 'Polyline → extrude (P)', 'click an outline on a plane, double-click or Enter to close, type a height: a capped mesh layer')}
+    </div>
+    <div class="toolbar-rule"></div>
     <div class="toolbar-group">
       ${button('data-op', 'duplicate', 'Duplicate', 'copy the active layer')}
       ${button('data-op', 'array', 'Array', 'copy the active layer into a columns by rows grid')}
@@ -232,6 +236,7 @@ export function createToolbar(
       grab: 'grab',
       inflate: 'inflate',
       measure: 'measure',
+      polyline: 'polyline',
     };
     for (const toolButton of toolButtons)
       toolButton.setAttribute(
@@ -398,7 +403,7 @@ export function createToolbar(
       return;
     }
     if (columns * rows > 1) {
-      const bounds = layer.store.computeRobustBounds();
+      const bounds = layer.localBounds();
       const width = bounds.max[0] - bounds.min[0];
       const depth = Math.max(bounds.max[2] - bounds.min[2], width * 0.5);
       const columnStep = new Vector3(width * 1.2 * layer.object.scale.x, 0, 0);
@@ -452,6 +457,7 @@ export function createToolbar(
     grab: 'grab',
     inflate: 'inflate',
     measure: 'measure',
+    polyline: 'polyline',
   };
   for (const toolButton of toolButtons)
     toolButton.addEventListener('click', () => {

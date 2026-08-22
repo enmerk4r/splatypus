@@ -7,6 +7,7 @@ import type { Command } from './history';
 import { SplatStore } from './SplatStore';
 import type { ShDegree } from './SplatStore';
 import { transformStore } from './storeTransforms';
+import { defaultSplatSpacing, meshToSplats } from '../mesh/solid';
 import { rescaleLayerInPlace } from '../viewer/sync';
 import { cloneLiveStrokes } from '../sketch/stroke';
 
@@ -25,6 +26,16 @@ export class DuplicateLayer implements Command {
       kind: source.kind,
       store: source.store.compacted(),
       sourceName: source.sourceName,
+      ...(source.solid
+        ? {
+            solid: {
+              ...source.solid,
+              positions: source.solid.positions.slice(),
+              indices: source.solid.indices.slice(),
+              colour: [...source.solid.colour] as [number, number, number],
+            },
+          }
+        : {}),
       ...(source.pointCloud ? { pointCloud: source.pointCloud } : {}),
       // Source bytes are never mutated, so duplicates can share them instead of copying 100+ MB.
       ...(source.sourceBytes ? { sourceBytes: source.sourceBytes } : {}),
@@ -75,7 +86,15 @@ export class MergeLayers implements Command {
       throw new LockedLayerError('Unlock all selected layers before merging them.');
     const degree = Math.max(...this.originals.map(({ layer }) => layer.store.shDegree)) as ShDegree;
     const store = SplatStore.concat(
-      this.originals.map(({ layer }) => transformStore(layer.store, layer.object.matrix)),
+      this.originals.map(({ layer }) =>
+        transformStore(
+          // Mesh layers contribute their surface as flat gaussians.
+          layer.solid
+            ? new SplatStore(meshToSplats(layer.solid, defaultSplatSpacing(layer.solid)))
+            : layer.store,
+          layer.object.matrix,
+        ),
+      ),
       degree,
     );
     this.merged = new Layer({

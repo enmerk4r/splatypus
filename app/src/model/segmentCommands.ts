@@ -265,7 +265,7 @@ export function snapToFloorCommand(
 ): SetLayerTransform | undefined {
   if (layer.locked) throw new LockedLayerError('Unlock the layer before moving it.');
   layer.object.updateMatrixWorld(true);
-  const local = layer.store.computeRobustBounds();
+  const local = layer.localBounds();
   const corner = new Vector3();
   let minY = Infinity;
   for (const x of [local.min[0], local.max[0]])

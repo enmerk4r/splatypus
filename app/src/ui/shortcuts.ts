@@ -85,6 +85,9 @@ export function wireShortcuts(viewer: Viewer, actions: ShortcutActions): () => v
       case 'KeyM':
         if (viewer.cameraRig.mode === 'orbit') viewer.setTool('measure');
         break;
+      case 'KeyP':
+        if (viewer.cameraRig.mode === 'orbit') viewer.setTool('polyline');
+        break;
       case 'BracketLeft':
       case 'BracketRight': {
         event.preventDefault();

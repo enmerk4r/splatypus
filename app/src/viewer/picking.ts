@@ -27,7 +27,9 @@ export function pickLayer(
   let best: LayerHit | undefined;
   for (const layer of document.layers) {
     if (!layer.visible || !accept(layer)) continue;
-    const hit = raycaster.intersectObject(layer.mesh, false)[0];
+    const hit =
+      raycaster.intersectObject(layer.mesh, false)[0] ??
+      (layer.solidObject ? raycaster.intersectObject(layer.solidObject, false)[0] : undefined);
     if (hit && (!best || hit.distance < best.distance))
       best = { layer, point: hit.point, distance: hit.distance };
   }

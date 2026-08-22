@@ -92,9 +92,9 @@ export class Document extends EventTarget {
     let hasVisible = false;
     const corner = new Vector3();
     for (const layer of this.layerValues) {
-      if (!layer.visible || layer.store.liveCount() === 0) continue;
+      if (!layer.visible || (layer.store.liveCount() === 0 && !layer.solid)) continue;
       layer.object.updateMatrixWorld(true);
-      const local = layer.store.computeRobustBounds();
+      const local = layer.localBounds();
       for (const x of [local.min[0], local.max[0]])
         for (const y of [local.min[1], local.max[1]])
           for (const z of [local.min[2], local.max[2]])
@@ -132,8 +132,9 @@ export class Document extends EventTarget {
   applySolo(): void {
     if (this.soloValue && !this.getLayer(this.soloValue)) this.soloValue = undefined;
     for (const layer of this.layerValues)
-      layer.mesh.visible =
-        layer.visible && (this.soloValue === undefined || layer.id === this.soloValue);
+      layer.setShown(
+        layer.visible && (this.soloValue === undefined || layer.id === this.soloValue),
+      );
   }
 
   notifyLayerChanged(id: string): void {

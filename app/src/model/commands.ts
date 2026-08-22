@@ -88,7 +88,7 @@ export class SetLayerVisible extends LayerValueCommand<boolean> {
   apply(value: boolean): void {
     const layer = this.layer();
     layer.visible = value;
-    layer.mesh.visible = value;
+    layer.setShown(value);
     this.document.applySolo();
     this.document.notifyLayerChanged(layer.id);
   }

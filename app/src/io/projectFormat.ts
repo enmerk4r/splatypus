@@ -7,6 +7,7 @@ import type { ShDegree } from '../model/SplatStore';
 import { GroupMap } from '../splats/groups';
 import type { GroupsMeta } from '../splats/groups';
 import type { Stroke, StrokeSettings } from '../sketch/stroke';
+import type { SolidData } from '../mesh/solid';
 import type { PointCloudInfo } from './pointCloud';
 
 const MAGIC = new TextEncoder().encode('SPLATYPUS_PROJECT\n');
@@ -58,6 +59,13 @@ interface StoredLayer {
   pointCloud?: PointCloudInfo;
   groups?: { meta: GroupsMeta; ids: BinaryRef };
   strokes?: StoredStroke[];
+  /** Triangle mesh of a `mesh` layer. */
+  solid?: {
+    positions: BinaryRef;
+    indices: BinaryRef;
+    colour: [number, number, number];
+    source?: { kind: 'extrude'; polygon: BinaryRef; baseY: number; height: number };
+  };
 }
 
 interface ProjectManifest {
@@ -136,6 +144,25 @@ export function writeProject(document: Document, view: ProjectViewState): ArrayB
         : {}),
       ...(layer.strokes.length
         ? { strokes: layer.strokes.map((stroke) => storedStroke(stroke, payload)) }
+        : {}),
+      ...(layer.solid
+        ? {
+            solid: {
+              positions: payload.add(layer.solid.positions),
+              indices: payload.add(layer.solid.indices),
+              colour: [...layer.solid.colour] as [number, number, number],
+              ...(layer.solid.source
+                ? {
+                    source: {
+                      kind: layer.solid.source.kind,
+                      polygon: payload.add(layer.solid.source.polygon),
+                      baseY: layer.solid.source.baseY,
+                      height: layer.solid.source.height,
+                    },
+                  }
+                : {}),
+            },
+          }
         : {}),
     };
   });
@@ -261,6 +288,23 @@ export function readProject(buffer: ArrayBuffer): {
       const groups = stored.groups
         ? GroupMap.fromIds(uints(bytes, payloadStart, stored.groups.ids), stored.groups.meta)
         : undefined;
+      const solid: SolidData | undefined = stored.solid
+        ? {
+            positions: floats(bytes, payloadStart, stored.solid.positions),
+            indices: uints(bytes, payloadStart, stored.solid.indices),
+            colour: [...stored.solid.colour] as [number, number, number],
+            ...(stored.solid.source
+              ? {
+                  source: {
+                    kind: 'extrude' as const,
+                    polygon: floats(bytes, payloadStart, stored.solid.source.polygon),
+                    baseY: stored.solid.source.baseY,
+                    height: stored.solid.source.height,
+                  },
+                }
+              : {}),
+          }
+        : undefined;
       const layer = new Layer({
         id: stored.id,
         name: stored.name,
@@ -272,6 +316,7 @@ export function readProject(buffer: ArrayBuffer): {
           ? { sourceBytes: refBytes(bytes, payloadStart, stored.sourceBytes) }
           : {}),
         ...(groups ? { groups } : {}),
+        ...(solid ? { solid } : {}),
         ...(stored.strokes
           ? {
               strokes: stored.strokes.map((stroke) =>
@@ -282,7 +327,7 @@ export function readProject(buffer: ArrayBuffer): {
       });
       layer.visible = stored.visible;
       layer.locked = stored.locked;
-      layer.mesh.visible = stored.visible;
+      layer.setShown(stored.visible);
       const matrix = new Matrix4().fromArray(stored.matrix);
       matrix.decompose(layer.object.position, layer.object.quaternion, layer.object.scale);
       layer.object.updateMatrix();

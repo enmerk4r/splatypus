@@ -25,6 +25,7 @@ const KIND_COLORS: Record<LayerKind, string> = {
   pointcloud: '#b8f34a',
   sketch: '#ff7868',
   segment: '#d49cff',
+  mesh: '#ffb347',
 };
 
 function compactCount(value: number): string {
@@ -151,7 +152,9 @@ export function createLayersPanel(
     name.addEventListener('dblclick', () => startRename(name, layer));
     const count = document.createElement('span');
     count.className = 'layer-count';
-    count.textContent = compactCount(layer.store.liveCount());
+    count.textContent = layer.solid
+      ? `${compactCount(layer.solid.indices.length / 3)} tri`
+      : compactCount(layer.store.liveCount());
     const sh = document.createElement('span');
     sh.className = `layer-sh${layer.store.shDegree ? ' present' : ''}`;
     sh.title = layer.store.shDegree ? `SH degree ${layer.store.shDegree}` : 'DC color only';

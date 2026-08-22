@@ -13,6 +13,7 @@ import { SketchSettingsStore } from './sketch/settings';
 import { SketchOverlay } from './sketch/SketchOverlay';
 import { SketchTool } from './sketch/SketchTool';
 import { MeasureTool } from './sketch/MeasureTool';
+import { PolylineTool } from './mesh/PolylineTool';
 import { createExportDialog } from './ui/exportDialog';
 import { createHoverLabel } from './ui/hoverLabel';
 import { Hud } from './ui/hud';
@@ -71,6 +72,12 @@ async function bootstrap(): Promise<void> {
   const measureTool = new MeasureTool(viewer, {
     overlay: sketchOverlay,
     popover: element<HTMLFormElement>('measure-popover'),
+    notify: (message, level) => hud.toast(message, level),
+  });
+  const polylineTool = new PolylineTool(viewer, {
+    overlay: sketchOverlay,
+    popover: element<HTMLFormElement>('extrude-popover'),
+    colour: () => sketchSettings.snapshot().colour,
     notify: (message, level) => hud.toast(message, level),
   });
   const sketchTool = new SketchTool(viewer, {
@@ -192,7 +199,7 @@ async function bootstrap(): Promise<void> {
     openFile: () => openInput.click(),
     addFile: () => addInput.click(),
     exportFile: exportDialog.open,
-    cancelStroke: () => sketchTool.cancelStroke() || measureTool.reset(),
+    cancelStroke: () => sketchTool.cancelStroke() || measureTool.reset() || polylineTool.reset(),
     adjustSketchSize: (factor) => sketchSettings.adjustRadius(factor),
     adjustSketchOpacity: (delta) => sketchSettings.adjustOpacity(delta),
     notify: (message, level) => hud.toast(message, level),
@@ -266,6 +273,7 @@ async function bootstrap(): Promise<void> {
       crop.dispose();
       sketchTool.dispose();
       measureTool.dispose();
+      polylineTool.dispose();
       sketchOverlay.dispose();
       viewer.dispose();
     },

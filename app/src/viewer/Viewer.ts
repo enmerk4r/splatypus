@@ -1,5 +1,7 @@
 import {
   Color,
+  DirectionalLight,
+  HemisphereLight,
   MOUSE,
   PerspectiveCamera,
   Scene,
@@ -28,7 +30,8 @@ export type ToolMode =
   | 'fade'
   | 'grab'
   | 'inflate'
-  | 'measure';
+  | 'measure'
+  | 'polyline';
 export const BRUSH_TOOLS: readonly ToolMode[] = ['recolor', 'fade', 'grab', 'inflate'];
 
 export class Viewer extends EventTarget {
@@ -75,6 +78,11 @@ export class Viewer extends EventTarget {
     this.scene.background = new Color('#111111');
     this.spark = new SparkRenderer({ renderer: this.renderer });
     this.scene.add(this.spark);
+    // Lights only affect three.js meshes (mesh layers, gizmos); splats are unlit.
+    this.scene.add(new HemisphereLight(0xffffff, 0x3a3f44, 1.1));
+    const key = new DirectionalLight(0xffffff, 1.2);
+    key.position.set(3, 6, 4);
+    this.scene.add(key);
     this.cameraRig = new CameraRig(this.cameraValue, canvas);
     this.gizmo = new LayerGizmo(this.scene, this.cameraValue, canvas, this.cameraRig);
     this.grid = new GridFloor(this.scene);

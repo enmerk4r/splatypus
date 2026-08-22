@@ -138,7 +138,7 @@ export class SketchTool {
   private readonly onPointerLeave = (): void => this.options.overlay.hideCursor();
 
   private updateCursor(event: PointerEvent): void {
-    if (this.viewer.tool === 'select' || this.viewer.tool === 'measure') return;
+    if (['select', 'measure', 'polyline'].includes(this.viewer.tool)) return;
     const rect = this.canvas.getBoundingClientRect();
     this.options.overlay.setCursor(
       event.clientX - rect.left,
@@ -172,8 +172,7 @@ export class SketchTool {
   private readonly onPointerDown = (event: PointerEvent): void => {
     this.updateCursor(event);
     if (
-      this.viewer.tool === 'select' ||
-      this.viewer.tool === 'measure' ||
+      ['select', 'measure', 'polyline'].includes(this.viewer.tool) ||
       event.button !== 0 ||
       event.altKey ||
       this.session

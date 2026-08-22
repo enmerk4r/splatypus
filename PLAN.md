@@ -152,6 +152,9 @@ Physics never looks at gaussians; it acts on **proxies**, and visuals (splat lay
 - Stretch: soft bodies/cloth on sketch strokes, imported glTF meshes as colliders alongside splats (hence agnostic).
 - **Done when:** a segmented object falls onto the scanned floor and comes to rest believably.
 
+### Phase 6b — Mesh layers (added)
+*Done in `main`: meshes render alongside splats (three.js depth buffer), polyline → capped extrusion tool (`P`), mesh layers in the project format, mesh → flat-gaussian sampling on PLY export/merge. See [`docs/MESH_NOTES.md`](docs/MESH_NOTES.md).*
+
 ### Phase 7 — Polish & pitch
 - Toolbar with icons, shortcuts (`B` brush, `E` erase, `S` select, `G` grab, `[ ]` size, `Ctrl+Z/Y`, `Space` physics), 3D cursor ring, sample gallery, project save/load JSON, README, 60-sec demo video, deck.
 - Stretch: stroke → polyline export (glTF lines / DXF / Speckle), WebXR mode (Spark supports it), WebGPU renderer toggle.

@@ -110,6 +110,20 @@
         <button type="submit" class="primary">Scale layer</button>
         <button type="button">Cancel</button>
       </form>
+      <form id="extrude-popover" class="measure-popover" aria-label="Extrude height" hidden>
+        <label
+          ><span>Height</span
+          ><input
+            name="height"
+            type="number"
+            step="any"
+            value="0.3"
+            aria-label="Extrusion height in metres (negative extrudes down)"
+          /><span>m</span></label
+        >
+        <button type="submit" class="primary">Extrude</button>
+        <button type="button">Cancel</button>
+      </form>
       <div id="drag-overlay" class="drag-overlay" hidden>
         <div><strong>Drop to open</strong><span>The current scene will be replaced</span></div>
       </div>

@@ -15,6 +15,11 @@ export class SketchOverlay {
     label: string;
     fixed: boolean;
   };
+  private polyline?: {
+    points: number[];
+    closed: boolean;
+    labels: { x: number; y: number; text: string }[];
+  };
   private frame = 0;
 
   constructor(
@@ -53,6 +58,16 @@ export class SketchOverlay {
 
   endStroke(): void {
     this.stroke = undefined;
+    this.schedule();
+  }
+
+  /** An outline in progress (canvas-relative xy pairs) with per-segment labels; undefined clears it. */
+  setPolyline(polyline?: {
+    points: number[];
+    closed: boolean;
+    labels: { x: number; y: number; text: string }[];
+  }): void {
+    this.polyline = polyline;
     this.schedule();
   }
 
@@ -124,6 +139,43 @@ export class SketchOverlay {
           ctx.lineTo(pts[at]!, pts[at + 1]!);
           ctx.stroke();
         }
+      }
+      ctx.restore();
+    }
+    const polyline = this.polyline;
+    if (polyline && polyline.points.length >= 2) {
+      ctx.save();
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      const pts = polyline.points;
+      ctx.beginPath();
+      ctx.moveTo(pts[0]!, pts[1]!);
+      for (let i = 2; i < pts.length; i += 2) ctx.lineTo(pts[i]!, pts[i + 1]!);
+      if (polyline.closed) ctx.closePath();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+      ctx.stroke();
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = polyline.closed ? '#b8f34a' : 'rgba(255,255,255,0.95)';
+      ctx.stroke();
+      if (polyline.closed) {
+        ctx.fillStyle = 'rgba(184,243,74,0.12)';
+        ctx.fill();
+      }
+      for (let i = 0; i < pts.length; i += 2) {
+        ctx.beginPath();
+        ctx.arc(pts[i]!, pts[i + 1]!, i === 0 ? 5 : 3.5, 0, Math.PI * 2);
+        ctx.fillStyle = i === 0 ? '#b8f34a' : '#ffffff';
+        ctx.fill();
+      }
+      ctx.font = '600 11px SFMono-Regular, Consolas, monospace';
+      ctx.textBaseline = 'middle';
+      for (const label of polyline.labels) {
+        const width = ctx.measureText(label.text).width + 10;
+        ctx.fillStyle = 'rgba(15,18,17,0.85)';
+        ctx.fillRect(label.x - width / 2, label.y - 9, width, 16);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(label.text, label.x - width / 2 + 5, label.y);
       }
       ctx.restore();
     }
