@@ -1,4 +1,5 @@
 import { Color, PerspectiveCamera, Scene, SRGBColorSpace, Vector3, WebGLRenderer } from 'three';
+import type { Object3D } from 'three';
 import { SparkRenderer } from '@sparkjsdev/spark';
 import type { Document } from '../model/Document';
 import { CameraRig } from './CameraRig';
@@ -6,6 +7,7 @@ import type { AxisView, CameraMode } from './CameraRig';
 import { LayerGizmo } from './LayerGizmo';
 import type { TransformMode } from './LayerGizmo';
 import { eventPointer, nearestProjectedPoint, pickLayer } from './picking';
+import type { LayerHit } from './picking';
 import { GridFloor } from './GridFloor';
 
 export class WebGLUnavailableError extends Error {}
@@ -18,7 +20,7 @@ export class Viewer extends EventTarget {
   private readonly canvas: HTMLCanvasElement;
   private readonly renderer: WebGLRenderer;
   private readonly scene = new Scene();
-  private readonly camera = new PerspectiveCamera(60, 1, 0.01, 1000);
+  private readonly cameraValue = new PerspectiveCamera(60, 1, 0.01, 1000);
   private readonly gizmo: LayerGizmo;
   private readonly grid: GridFloor;
   private readonly onFrame: (now: number) => void;
@@ -27,6 +29,12 @@ export class Viewer extends EventTarget {
   private renderScale = 1;
   private lastFrame = performance.now();
   private pointerDown?: Vector3;
+  /** Latest pointer move, coalesced to one hover raycast per frame. */
+  private hoverPending?: PointerEvent;
+  private hoverLeft = false;
+  private lastHover?: PointerEvent;
+  /** While any guard returns true (e.g. a gizmo is in use) canvas clicks/hovers are ignored. */
+  private readonly interactionGuards: (() => boolean)[] = [];
 
   constructor(canvas: HTMLCanvasElement, frameCallback: (now: number) => void) {
     super();
@@ -51,8 +59,8 @@ export class Viewer extends EventTarget {
     this.scene.background = new Color('#111111');
     this.spark = new SparkRenderer({ renderer: this.renderer });
     this.scene.add(this.spark);
-    this.cameraRig = new CameraRig(this.camera, canvas);
-    this.gizmo = new LayerGizmo(this.scene, this.camera, canvas, this.cameraRig);
+    this.cameraRig = new CameraRig(this.cameraValue, canvas);
+    this.gizmo = new LayerGizmo(this.scene, this.cameraValue, canvas, this.cameraRig);
     this.grid = new GridFloor(this.scene);
     this.grid.reset(new Vector3(), 1, 0);
 
@@ -60,7 +68,8 @@ export class Viewer extends EventTarget {
       const deltaSeconds = Math.min((now - this.lastFrame) / 1000, 0.1);
       this.lastFrame = now;
       this.cameraRig.update(deltaSeconds);
-      this.renderer.render(this.scene, this.camera);
+      this.flushHover();
+      this.renderer.render(this.scene, this.cameraValue);
       frameCallback(now);
     };
     window.addEventListener('resize', this.resize);
@@ -68,9 +77,11 @@ export class Viewer extends EventTarget {
     canvas.addEventListener('dblclick', this.onDoubleClick);
     canvas.addEventListener('pointerdown', this.onPointerDown);
     canvas.addEventListener('pointerup', this.onPointerUp);
+    canvas.addEventListener('pointermove', this.onPointerMove);
+    canvas.addEventListener('pointerleave', this.onPointerLeave);
     this.resize();
-    this.camera.position.set(2, 1.2, 2);
-    this.camera.lookAt(0, 0, 0);
+    this.cameraValue.position.set(2, 1.2, 2);
+    this.cameraValue.lookAt(0, 0, 0);
     this.renderer.setAnimationLoop(this.onFrame);
   }
 
@@ -152,8 +163,8 @@ export class Viewer extends EventTarget {
   }
 
   setFov(value: number): void {
-    this.camera.fov = value;
-    this.camera.updateProjectionMatrix();
+    this.cameraValue.fov = value;
+    this.cameraValue.updateProjectionMatrix();
   }
 
   setRenderScale(scale: number): void {
@@ -174,6 +185,33 @@ export class Viewer extends EventTarget {
     this.canvas.removeEventListener('dblclick', this.onDoubleClick);
     this.canvas.removeEventListener('pointerdown', this.onPointerDown);
     this.canvas.removeEventListener('pointerup', this.onPointerUp);
+    this.canvas.removeEventListener('pointermove', this.onPointerMove);
+    this.canvas.removeEventListener('pointerleave', this.onPointerLeave);
+  }
+
+  get camera(): PerspectiveCamera {
+    return this.cameraValue;
+  }
+  get canvasElement(): HTMLCanvasElement {
+    return this.canvas;
+  }
+  /** Adds a non-document object (gizmo helper, crop box) to the scene. */
+  addHelper(object: Object3D): void {
+    this.scene.add(object);
+  }
+  removeHelper(object: Object3D): void {
+    this.scene.remove(object);
+  }
+  /** Registers a predicate; while it returns true, canvas clicks and hovers are ignored. */
+  addInteractionGuard(guard: () => boolean): () => void {
+    this.interactionGuards.push(guard);
+    return (): void => {
+      const at = this.interactionGuards.indexOf(guard);
+      if (at >= 0) this.interactionGuards.splice(at, 1);
+    };
+  }
+  private get interacting(): boolean {
+    return this.gizmo.isInteracting || this.interactionGuards.some((guard) => guard());
   }
 
   private applyOrientation(): void {
@@ -199,8 +237,8 @@ export class Viewer extends EventTarget {
     const width = Math.max(this.canvas.clientWidth, 1),
       height = Math.max(this.canvas.clientHeight, 1);
     this.renderer.setSize(width, height, false);
-    this.camera.aspect = width / height;
-    this.camera.updateProjectionMatrix();
+    this.cameraValue.aspect = width / height;
+    this.cameraValue.updateProjectionMatrix();
   };
 
   private readonly onVisibilityChange = (): void => {
@@ -217,14 +255,46 @@ export class Viewer extends EventTarget {
     const rect = this.canvas.getBoundingClientRect();
     const pointer = eventPointer(event, rect);
     const hit =
-      pickLayer(document, this.camera, pointer) ??
-      nearestProjectedPoint(document, this.camera, pointer, rect);
+      pickLayer(document, this.cameraValue, pointer) ??
+      nearestProjectedPoint(document, this.cameraValue, pointer, rect);
     if (hit) this.cameraRig.retarget(hit.point);
   };
 
   private readonly onPointerDown = (event: PointerEvent): void => {
     this.pointerDown = new Vector3(event.clientX, event.clientY, event.button);
   };
+
+  private readonly onPointerMove = (event: PointerEvent): void => {
+    // Buttons down means an orbit or gizmo drag, not a hover.
+    this.hoverPending = event.buttons === 0 ? event : undefined;
+  };
+
+  private readonly onPointerLeave = (): void => {
+    this.hoverPending = undefined;
+    this.hoverLeft = true;
+  };
+
+  /** Runs at most one hover raycast per frame and reports it as `canvas-hover` {event, hit?}. */
+  private flushHover(): void {
+    if (this.hoverLeft && this.lastHover) {
+      this.hoverLeft = false;
+      this.dispatchEvent(new CustomEvent('canvas-hover', { detail: { event: this.lastHover } }));
+    }
+    const event = this.hoverPending;
+    if (!event) return;
+    this.hoverPending = undefined;
+    this.lastHover = event;
+    const document = this.documentValue;
+    const hit: LayerHit | undefined =
+      document && this.cameraRig.mode === 'orbit' && !this.interacting
+        ? pickLayer(
+            document,
+            this.cameraValue,
+            eventPointer(event, this.canvas.getBoundingClientRect()),
+          )
+        : undefined;
+    this.dispatchEvent(new CustomEvent('canvas-hover', { detail: { event, hit } }));
+  }
 
   private readonly onPointerUp = (event: PointerEvent): void => {
     const start = this.pointerDown;
@@ -238,7 +308,7 @@ export class Viewer extends EventTarget {
       event.metaKey ||
       event.shiftKey ||
       this.cameraRig.mode !== 'orbit' ||
-      this.gizmo.isInteracting // a click on a gizmo handle must not change the selection
+      this.interacting // a click on a gizmo handle must not change the selection
     )
       return;
     if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 4) return;
@@ -247,8 +317,9 @@ export class Viewer extends EventTarget {
     // Spark's raycast misses sparse point clouds (the ray slips between tiny gaussians), so fall
     // back to the nearest projected centre within a few pixels — same as double-click retargeting.
     const hit =
-      pickLayer(document, this.camera, pointer) ??
-      nearestProjectedPoint(document, this.camera, pointer, rect);
+      pickLayer(document, this.cameraValue, pointer) ??
+      nearestProjectedPoint(document, this.cameraValue, pointer, rect);
     document.setSelection(hit ? [hit.layer.id] : []);
+    this.dispatchEvent(new CustomEvent('canvas-click', { detail: { event, hit } }));
   };
 }

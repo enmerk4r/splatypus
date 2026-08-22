@@ -3,11 +3,18 @@ import { AppImports } from './AppImports';
 import type { Document as SplatDocument } from './model/Document';
 import { LockedLayerError, SetPointScale } from './model/commands';
 import { wireFileInput } from './io/dragDrop';
+import { loadGroups, tryLoadSidecar } from './io/loadGroups';
+import type { SplatSource } from './io/loadSplat';
 import { getInitialSource } from './io/urlParams';
+import { CropBox } from './select/CropBox';
+import { Segmentation } from './select/Segmentation';
+import { GroupMapError } from './splats/groups';
 import { createExportDialog } from './ui/exportDialog';
+import { createHoverLabel } from './ui/hoverLabel';
 import { Hud } from './ui/hud';
 import { createLayersPanel } from './ui/layersPanel';
 import { createPanel } from './ui/panel';
+import { createSegmentPanel } from './ui/segmentPanel';
 import { wireShortcuts } from './ui/shortcuts';
 import { Viewer, WebGLUnavailableError } from './viewer/Viewer';
 
@@ -48,6 +55,53 @@ async function bootstrap(): Promise<void> {
   const sampleSelect = element<HTMLSelectElement>('sample-select');
   const flyHint = element('fly-hint');
   const imports = new AppImports(viewer, hud, emptyState);
+  const segmentation = new Segmentation(viewer);
+  const crop = new CropBox(viewer);
+  viewer.addInteractionGuard(() => crop.isInteracting);
+
+  /** Attaches a dropped `.groups` sidecar to the layer segmentation currently targets. */
+  const attachGroups = async (file: File): Promise<void> => {
+    const target = segmentation.targetLayer();
+    if (!target) {
+      hud.toast('Open a splat (and select a layer) first, then drop its .groups sidecar.');
+      return;
+    }
+    try {
+      segmentation.applyGroups(
+        target,
+        await loadGroups({ kind: 'file', file }, target.store.count),
+      );
+      hud.toast(`Loaded ${target.groups?.numGroups ?? 0} groups onto “${target.name}”.`);
+    } catch (error) {
+      hud.toast(error instanceof GroupMapError ? error.message : `Couldn't read ${file.name}.`);
+    }
+  };
+
+  /**
+   * Opens a URL source and then its `.groups` sidecar: an explicit `?groups=` must load,
+   * the one implied by the splat URL (`scan.ply` → `scan.groups`) is optional.
+   */
+  const openWithSidecar = async (source: SplatSource, groupsUrl?: string): Promise<void> => {
+    const before = viewer.document;
+    await imports.open(source);
+    const document = viewer.document;
+    const layer = document?.layers[0];
+    if (!document || document === before || !layer || source.kind !== 'url') return;
+    const groups = groupsUrl
+      ? await loadGroups({ kind: 'url', url: groupsUrl }, layer.store.count).catch(
+          (error: unknown) => {
+            hud.toast(
+              error instanceof GroupMapError ? error.message : `Couldn't read ${groupsUrl}.`,
+            );
+            return undefined;
+          },
+        )
+      : await tryLoadSidecar(source.url, layer.store.count, (message) => hud.toast(message));
+    if (groups && viewer.document === document) {
+      segmentation.applyGroups(layer, groups);
+      hud.toast(`Loaded ${groups.numGroups} groups from the .groups sidecar.`);
+    }
+  };
 
   const execute = (action: () => void): boolean => {
     try {
@@ -73,6 +127,10 @@ async function bootstrap(): Promise<void> {
     onAdd: () => addInput.click(),
     onError: (message) => hud.toast(message),
   });
+  const segmentPanel = createSegmentPanel(viewer, segmentation, crop, element('segment-panel'), {
+    onError: (message) => hud.toast(message),
+  });
+  const hoverLabel = createHoverLabel(element('hover-label'), segmentation);
   const exportDialog = createExportDialog(
     element<HTMLDialogElement>('export-dialog'),
     element<HTMLButtonElement>('export-file'),
@@ -87,6 +145,7 @@ async function bootstrap(): Promise<void> {
     {
       onOpen: (file) => void imports.open({ kind: 'file', file }),
       onAdd: (files) => void imports.add(files),
+      onGroups: (file) => void attachGroups(file),
       onError: (message) => hud.toast(message),
     },
   );
@@ -121,23 +180,28 @@ async function bootstrap(): Promise<void> {
   }
   sampleSelect.addEventListener('change', () => {
     const sample = samples.find((candidate) => candidate.name === sampleSelect.value);
-    if (sample) void imports.open({ kind: 'url', url: sample.url, name: sample.name });
+    if (sample) void openWithSidecar({ kind: 'url', url: sample.url, name: sample.name });
   });
   const initial = getInitialSource();
-  if (initial.url) void imports.open({ kind: 'url', url: initial.url });
+  if (initial.url) void openWithSidecar({ kind: 'url', url: initial.url }, initial.groups);
   else if (initial.sample) {
     const sample = samples.find(
       (candidate) => candidate.name.toLowerCase() === initial.sample!.toLowerCase(),
     );
     if (sample) {
       sampleSelect.value = sample.name;
-      void imports.open({ kind: 'url', url: sample.url, name: sample.name });
+      void openWithSidecar({ kind: 'url', url: sample.url, name: sample.name }, initial.groups);
     } else hud.toast(`Unknown sample “${initial.sample}”.`);
   }
 
   // Dev-only console hook: `__splatypus.viewer.document`, `__splatypus.viewer.renderOnce()`.
   if (import.meta.env.DEV)
-    (window as unknown as { __splatypus?: unknown }).__splatypus = { viewer, imports };
+    (window as unknown as { __splatypus?: unknown }).__splatypus = {
+      viewer,
+      imports,
+      segmentation,
+      crop,
+    };
 
   window.addEventListener('beforeunload', (event) => {
     if (viewer.document?.history.canUndo()) event.preventDefault();
@@ -149,7 +213,11 @@ async function bootstrap(): Promise<void> {
       disposeShortcuts();
       panel.dispose();
       layersPanel.dispose();
+      segmentPanel.dispose();
+      hoverLabel.dispose();
       exportDialog.dispose();
+      segmentation.dispose();
+      crop.dispose();
       viewer.dispose();
     },
     { once: true },

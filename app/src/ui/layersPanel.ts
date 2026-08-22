@@ -1,5 +1,7 @@
+import { Vector3 } from 'three';
 import type { Document } from '../model/Document';
 import type { Layer, LayerKind } from '../model/Layer';
+import { ArrayLayer, snapToFloorCommand } from '../model/segmentCommands';
 import {
   DuplicateLayer,
   LockedLayerError,
@@ -218,12 +220,42 @@ export function createLayersPanel(
     };
     const up = button('↑', 'Move layer up', () => move(1));
     const down = button('↓', 'Move layer down', () => move(-1));
+    const solo = button('SOLO', 'Show only this layer (view state, not undoable)', () => {
+      if (!active) return;
+      model.setSolo(model.solo === active.id ? undefined : active.id);
+    });
+    const floor = button('FLOOR', 'Drop the layer onto the ground plane (y = 0)', () => {
+      if (!active) return;
+      execute(() => {
+        const command = snapToFloorCommand(model, active);
+        if (command) model.history.push(command);
+      });
+    });
+    const array = button('×5', 'Four more copies in a row', () => {
+      if (!active) return;
+      execute(() => {
+        const bounds = active.store.computeRobustBounds();
+        const step = new Vector3(
+          (bounds.max[0] - bounds.min[0]) * 1.2 * active.object.scale.x,
+          0,
+          0,
+        );
+        model.history.push(new ArrayLayer(model, active, 4, step));
+      });
+    });
+    solo.setAttribute(
+      'aria-pressed',
+      String(model.solo !== undefined && model.solo === active?.id),
+    );
+    solo.disabled = !active && model.solo === undefined;
+    floor.disabled = !active || active.locked;
+    array.disabled = !active || active.locked;
     duplicate.disabled = !active || active.locked;
     merge.disabled = selected.length < 2 || selected.some((layer) => layer.locked);
     remove.disabled = selected.length === 0 || selected.some((layer) => layer.locked);
     up.disabled = !active || active.locked || model.layers.at(-1)?.id === active.id;
     down.disabled = !active || active.locked || model.layers[0]?.id === active.id;
-    toolbar.append(add, duplicate, merge, remove, up, down);
+    toolbar.append(add, duplicate, merge, remove, up, down, solo, floor, array);
     const footer = document.createElement('div');
     footer.className = 'layers-footer';
     footer.textContent = `${model.layers.length} layers · ${compactCount(model.totalLive())} splats · ${compactCount(model.hiddenCount())} hidden`;

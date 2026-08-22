@@ -31,13 +31,18 @@
         <p class="formats">PLY · COMPRESSED.PLY · SPZ · SPLAT · KSPLAT · SOG</p>
       </section>
 
-      <input id="file-input" class="sr-only" type="file" accept=".ply,.spz,.splat,.ksplat,.sog" />
+      <input
+        id="file-input"
+        class="sr-only"
+        type="file"
+        accept=".ply,.spz,.splat,.ksplat,.sog,.groups"
+      />
       <input
         id="add-file-input"
         class="sr-only"
         type="file"
         multiple
-        accept=".ply,.spz,.splat,.ksplat,.sog"
+        accept=".ply,.spz,.splat,.ksplat,.sog,.groups"
       />
 
       <aside id="hud" class="hud" aria-live="polite">
@@ -75,7 +80,14 @@
       <div class="right-rail">
         <div id="panel" class="panel-host"></div>
         <aside id="layers-panel" class="layers-panel" aria-label="Layers" hidden></aside>
+        <aside
+          id="segment-panel"
+          class="layers-panel segment-panel"
+          aria-label="Segmentation"
+          hidden
+        ></aside>
       </div>
+      <div id="hover-label" class="hover-label" hidden></div>
       <div id="drag-overlay" class="drag-overlay" hidden>
         <div><strong>Drop to open</strong><span>The current scene will be replaced</span></div>
       </div>

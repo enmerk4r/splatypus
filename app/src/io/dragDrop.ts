@@ -1,3 +1,5 @@
+import { isGroupsFile } from './loadGroups';
+
 const SUPPORTED_FILE = /\.(?:ply|spz|splat|ksplat|sog)$/i;
 
 export function isSupportedSplat(file: File): boolean {
@@ -7,6 +9,8 @@ export function isSupportedSplat(file: File): boolean {
 export interface FileInputCallbacks {
   onOpen: (file: File) => void;
   onAdd: (files: File[]) => void;
+  /** A `.groups` segmentation sidecar attaches to the open scene instead of replacing it. */
+  onGroups?: (file: File) => void;
   onError: (message: string) => void;
 }
 
@@ -20,20 +24,26 @@ export function wireFileInput(
   let dragDepth = 0;
   const overlayStrong = overlay.querySelector<HTMLElement>('strong');
   const overlayHint = overlay.querySelector<HTMLElement>('span');
-  const valid = (files: File[]): File[] => {
-    const supported = files.filter(isSupportedSplat);
-    if (supported.length !== files.length)
-      callbacks.onError('Unsupported file skipped. Choose PLY, SPZ, SPLAT, KSPLAT, or SOG files.');
-    return supported;
+  /** Splits a drop into splat files (delivered) and .groups sidecars (attached); warns on the rest. */
+  const route = (files: File[], deliver: (splats: File[]) => void): void => {
+    const groups = files.filter(isGroupsFile);
+    const splats = files.filter(isSupportedSplat);
+    if (groups.length + splats.length !== files.length)
+      callbacks.onError(
+        'Unsupported file skipped. Choose PLY, SPZ, SPLAT, KSPLAT, SOG, or .groups files.',
+      );
+    for (const file of groups) {
+      if (callbacks.onGroups) callbacks.onGroups(file);
+      else callbacks.onError('Open a splat first, then drop its .groups sidecar.');
+    }
+    if (splats.length) deliver(splats);
   };
   const onOpenChange = (): void => {
-    const file = valid([...(openInput.files ?? [])])[0];
-    if (file) callbacks.onOpen(file);
+    route([...(openInput.files ?? [])], (splats) => callbacks.onOpen(splats[0]!));
     openInput.value = '';
   };
   const onAddChange = (): void => {
-    const files = valid([...(addInput.files ?? [])]);
-    if (files.length) callbacks.onAdd(files);
+    route([...(addInput.files ?? [])], (splats) => callbacks.onAdd(splats));
     addInput.value = '';
   };
   const onDragEnter = (event: DragEvent): void => {
@@ -64,10 +74,10 @@ export function wireFileInput(
     event.preventDefault();
     dragDepth = 0;
     overlay.hidden = true;
-    const files = valid([...(event.dataTransfer?.files ?? [])]);
-    if (!files.length) return;
-    if (event.shiftKey || files.length > 1) callbacks.onAdd(files);
-    else callbacks.onOpen(files[0]!);
+    route([...(event.dataTransfer?.files ?? [])], (splats) => {
+      if (event.shiftKey || splats.length > 1) callbacks.onAdd(splats);
+      else callbacks.onOpen(splats[0]!);
+    });
   };
   const openPicker = (): void => openInput.click();
   openButton.addEventListener('click', openPicker);

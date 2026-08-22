@@ -5,3 +5,6 @@ app/.npm-cache/
 *.log
 # local test scenes (too large for git)
 models/
+
+app/public/samples/_*.ply
+app/public/samples/_*.groups

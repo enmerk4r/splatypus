@@ -47,6 +47,7 @@ Quality checks run with `npm run lint` and `npm test`.
 | `Ctrl/Cmd+Z` | Undo |
 | `Ctrl/Cmd+Shift+Z` or `Ctrl/Cmd+Y` | Redo |
 | `Ctrl/Cmd+E` | Export a standard 3DGS PLY |
+| Click | Select the layer under the cursor — and its group, when the layer is segmented |
 | `1` / `3` / `7` | Front/right/top view |
 
 Shift-drop adds a single file to the current document. Dropping multiple files always adds each as a layer. An ordinary single-file drop or **Open** replaces the scene after an unsaved-changes guard.
@@ -56,6 +57,37 @@ Shift-drop adds a single file to the current document. Dropping multiple files a
 The **LAYERS** panel lists the topmost layer first. Click to select, Ctrl/Cmd-click to toggle, and Shift-click to select a range. Its toolbar adds, duplicates, merges, deletes, and reorders layers. Double-click a layer name to rename it. Eye, lock, rename, order, transforms, duplicate, merge, delete, and point-cloud parameter changes participate in undo/redo.
 
 The transform gizmo appears when exactly one unlocked layer is selected. Export bakes each layer's translate/rotate/uniform-scale transform into its splats but intentionally does not bake the viewer-only up-axis root transform.
+
+## Segmentation and object tools
+
+Segmentation is per layer and index-aligned with the layer's splats. It comes from either a
+`.groups` sidecar (baked offline; format in [docs/GROUPS_FORMAT.md](docs/GROUPS_FORMAT.md)) or the
+built-in geometric bake:
+
+```sh
+node tools/bake-connectivity.mjs scan.ply scan.groups     # offline, tunable (--voxel --colour --slack --min --opacity)
+```
+
+In the app, the **SEGMENT** panel runs the same bake on the active layer (**Segment by**
+colour + position / position only, **Detail** 1–5), and **Show labels** paints every group in its
+own colour (grey = unassigned) with a **Blend** slider. `scan.groups` next to a `?url=`-loaded
+`scan.ply` loads automatically; `?groups=<encoded-url>` names one explicitly; dropping a
+`.groups` file attaches it to the active (or only) layer — it must cover exactly that layer's
+splat count.
+
+Hover a group to see its name; click to select it (the picker prefers the nearest *assigned*
+splat); **Split to layer** lifts it into its own `segment` layer, re-originned on its centroid
+so the gizmo sits on the object and rotation spins it in place. Splits, crops and all layer
+tools are undoable. The **LAYERS** toolbar adds **SOLO** (show only this layer — view state),
+**FLOOR** (drop onto the grid plane) and **×5** (four more copies in a row). **CROP** shows a box
+gizmo (move/resize); **Keep inside** / **Cut inside** hide everything on the wrong side in every
+visible unlocked layer (`Ctrl+Z` restores). Hidden splats are never exported.
+
+Limits: the connectivity bake is a patch segmenter — it cannot split one connected object on
+geometry alone, and the colour constraint over-segments (it splits a shadow from its surface);
+it runs on the main thread (a second or two per 200 k splats). Tints and labels are not shown on
+layers rendered through the LoD tree (≥ 1.5 M splats), though selection and split still work.
+Integration background: [docs/SEGMENTATION_NOTES.md](docs/SEGMENTATION_NOTES.md).
 
 ## Export
 

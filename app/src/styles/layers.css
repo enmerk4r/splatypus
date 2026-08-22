@@ -117,7 +117,7 @@
 
 .layers-toolbar {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 3px;
   padding: 7px;
   border-top: 1px solid var(--line);
@@ -138,6 +138,101 @@
 .layers-toolbar button:disabled {
   opacity: 0.25;
   cursor: default;
+}
+
+.layers-toolbar button[aria-pressed='true'] {
+  border-color: var(--lime);
+  color: var(--lime);
+}
+
+.segment-body {
+  display: grid;
+  gap: 7px;
+  padding: 8px 10px 10px;
+}
+
+.segment-row {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  align-items: center;
+  gap: 6px;
+  color: #aeb8b1;
+}
+
+.segment-row select {
+  min-width: 0;
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 2px;
+  padding: 3px 4px;
+  color: #e9f0eb;
+  background: #141714;
+  font: inherit;
+}
+
+.segment-row input[type='range'] {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  accent-color: var(--lime);
+}
+
+.segment-actions {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 3px;
+}
+
+.segment-actions button {
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 2px;
+  padding: 6px 2px;
+  color: #cbd4ce;
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  font: inherit;
+  font-size: 8px;
+  letter-spacing: 0.06em;
+}
+
+.segment-actions button:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
+.segment-actions button[aria-pressed='true'],
+.segment-actions button.primary:not(:disabled) {
+  border-color: var(--lime);
+  color: var(--lime);
+}
+
+.segment-status {
+  margin: 0;
+  color: #8e9992;
+  line-height: 1.5;
+}
+
+.segment-subhead {
+  margin: 4px -10px 0;
+  border-top: 1px solid var(--line);
+}
+
+.hover-label {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 7;
+  padding: 4px 7px;
+  border: 1px solid rgba(184, 243, 74, 0.4);
+  border-radius: 3px;
+  color: #e9f0eb;
+  background: rgba(15, 18, 17, 0.92);
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-size: 10px;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 .export-dialog {

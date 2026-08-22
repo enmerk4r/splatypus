@@ -9,6 +9,7 @@ export class Document extends EventTarget {
   name: string;
   private layerValues: Layer[] = [];
   private selectionValue = new Set<string>();
+  private soloValue?: string;
 
   constructor(name = 'Untitled') {
     super();
@@ -116,6 +117,25 @@ export class Document extends EventTarget {
     };
   }
 
+  /** Id of the layer shown alone (everything else hidden), or undefined. View state, not undoable. */
+  get solo(): string | undefined {
+    return this.soloValue;
+  }
+
+  setSolo(id: string | undefined): void {
+    this.soloValue = id && this.getLayer(id) ? id : undefined;
+    this.applySolo();
+    this.dispatchEvent(new Event('layers-changed'));
+  }
+
+  /** Mesh visibility = layer.visible unless a solo is active. Re-applied after structure changes. */
+  applySolo(): void {
+    if (this.soloValue && !this.getLayer(this.soloValue)) this.soloValue = undefined;
+    for (const layer of this.layerValues)
+      layer.mesh.visible =
+        layer.visible && (this.soloValue === undefined || layer.id === this.soloValue);
+  }
+
   notifyLayerChanged(id: string): void {
     this.dispatchEvent(new CustomEvent('layer-changed', { detail: { id } }));
   }
@@ -131,6 +151,7 @@ export class Document extends EventTarget {
   private syncRootOrder(): void {
     this.root.clear();
     this.layerValues.forEach((layer) => this.root.add(layer.object));
+    this.applySolo();
   }
 
   private readonly forwardHistory = (event: Event): void => {
