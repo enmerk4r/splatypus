@@ -7,7 +7,6 @@ import type { UpAxis, Viewer } from '../viewer/Viewer';
 interface PanelSettings {
   background: string;
   grid: boolean;
-  axes: boolean;
   upAxis: UpAxis;
   cameraMode: CameraMode;
   fov: number;
@@ -31,7 +30,6 @@ export function createPanel(
   const settings: PanelSettings = {
     background: '#111111',
     grid: true,
-    axes: true,
     upAxis: viewer.upAxis,
     cameraMode: viewer.cameraRig.mode,
     fov: 60,
@@ -49,9 +47,6 @@ export function createPanel(
   pane
     .addBinding(settings, 'grid', { label: 'Grid' })
     .on('change', (event) => viewer.setGridVisible(event.value));
-  pane
-    .addBinding(settings, 'axes', { label: 'Axes' })
-    .on('change', (event) => viewer.setAxesVisible(event.value));
   pane
     .addBinding(settings, 'upAxis', {
       label: 'Up axis',

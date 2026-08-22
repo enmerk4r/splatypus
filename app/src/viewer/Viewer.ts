@@ -1,5 +1,4 @@
 import {
-  AxesHelper,
   Color,
   GridHelper,
   Material,
@@ -33,9 +32,7 @@ export class Viewer extends EventTarget {
   private readonly onFrame: (now: number) => void;
   private documentValue?: SplatDocument;
   private grid?: GridHelper;
-  private axes?: AxesHelper;
   private gridVisible = true;
-  private axesVisible = true;
   private upAxisValue: UpAxis = 'y-down';
   private renderScale = 1;
   private lastFrame = performance.now();
@@ -65,7 +62,7 @@ export class Viewer extends EventTarget {
     this.spark = new SparkRenderer({ renderer: this.renderer });
     this.scene.add(this.spark);
     this.cameraRig = new CameraRig(this.camera, canvas);
-    this.resetHelpers(new Vector3(), 1, -1);
+    this.resetGrid(new Vector3(), 1, -1);
 
     this.onFrame = (now): void => {
       const deltaSeconds = Math.min((now - this.lastFrame) / 1000, 0.1);
@@ -100,7 +97,7 @@ export class Viewer extends EventTarget {
     this.applyOrientation();
     this.scene.add(document.mesh);
     const bounds = document.getRobustBounds();
-    this.resetHelpers(bounds.center, bounds.radius, bounds.min.y);
+    this.resetGrid(bounds.center, bounds.radius, bounds.min.y);
     this.cameraRig.frame(bounds);
     this.dispatchEvent(new CustomEvent('document-changed', { detail: document }));
   }
@@ -139,11 +136,6 @@ export class Viewer extends EventTarget {
     this.dispatchEvent(new Event('settings-changed'));
   }
 
-  setAxesVisible(visible: boolean): void {
-    this.axesVisible = visible;
-    if (this.axes) this.axes.visible = visible;
-  }
-
   get upAxis(): UpAxis {
     return this.upAxisValue;
   }
@@ -153,7 +145,7 @@ export class Viewer extends EventTarget {
     if (!this.documentValue) return;
     this.applyOrientation();
     const bounds = this.documentValue.getRobustBounds();
-    this.resetHelpers(bounds.center, bounds.radius, bounds.min.y);
+    this.resetGrid(bounds.center, bounds.radius, bounds.min.y);
     this.cameraRig.frame(bounds);
   }
 
@@ -177,7 +169,7 @@ export class Viewer extends EventTarget {
     this.renderer.setAnimationLoop(null);
     this.clearDocument();
     this.cameraRig.dispose();
-    this.disposeHelpers();
+    this.disposeGrid();
     this.renderer.dispose();
     window.removeEventListener('resize', this.resize);
     document.removeEventListener('visibilitychange', this.onVisibilityChange);
@@ -202,30 +194,23 @@ export class Viewer extends EventTarget {
     mesh.updateMatrixWorld(true);
   }
 
-  private resetHelpers(center: Vector3, radius: number, floorY: number): void {
-    this.disposeHelpers();
+  private resetGrid(center: Vector3, radius: number, floorY: number): void {
+    this.disposeGrid();
     this.grid = new GridHelper(radius * 4, 20, 0x52616d, 0x263139);
     this.grid.position.set(center.x, floorY, center.z);
     this.grid.visible = this.gridVisible;
     this.scene.add(this.grid);
-    this.axes = new AxesHelper(radius);
-    this.axes.position.copy(center);
-    this.axes.visible = this.axesVisible;
-    this.scene.add(this.axes);
   }
 
-  private disposeHelpers(): void {
-    for (const helper of [this.grid, this.axes]) {
-      if (!helper) continue;
-      this.scene.remove(helper);
-      helper.geometry.dispose();
-      const materials: Material[] = Array.isArray(helper.material)
-        ? helper.material
-        : [helper.material];
-      materials.forEach((material) => material.dispose());
-    }
+  private disposeGrid(): void {
+    if (!this.grid) return;
+    this.scene.remove(this.grid);
+    this.grid.geometry.dispose();
+    const materials: Material[] = Array.isArray(this.grid.material)
+      ? this.grid.material
+      : [this.grid.material];
+    materials.forEach((material) => material.dispose());
     this.grid = undefined;
-    this.axes = undefined;
   }
 
   private readonly resize = (): void => {
