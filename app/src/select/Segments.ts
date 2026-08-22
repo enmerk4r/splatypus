@@ -1,16 +1,34 @@
-import { Color, Vector3 } from 'three';
-import { SplatMesh } from '@sparkjsdev/spark';
+import { Box3, Color, Group, Vector3 } from 'three';
+import type { Object3D } from 'three';
+import { PackedSplats, SplatMesh } from '@sparkjsdev/spark';
 import type { Viewer } from '../viewer/Viewer';
 import type { GroupInfo } from '../splats/groups';
 import { GroupMap, UNASSIGNED } from '../splats/groups';
 import { bakeConnectivity, suggestOptions } from '../splats/bakeConnectivity';
 
-/** A group lifted out of the scan into its own mesh, so it can be moved or removed. */
+/**
+ * An object in the edited scene: a group lifted out of the scan, a copy of one, or a
+ * grouping of several.
+ *
+ * `groupId` and `indices` belong only to the original lift-out, because only it owns
+ * splats hidden in the scan — a duplicate has no claim on them, and merging one back
+ * would restore splats that its source still stands for.
+ */
 export interface SegmentLayer {
-  groupId: number;
+  readonly id: number;
+  groupId?: number;
   name: string;
-  mesh: SplatMesh;
-  indices: Uint32Array;
+  /** What the gizmo moves. A SplatMesh normally; a Group once objects are nested. */
+  object: Object3D;
+  mesh?: SplatMesh;
+  indices?: Uint32Array;
+  children: SegmentLayer[];
+  /** Splats this object draws. Read from the source rather than from the mesh, whose
+   *  own count stays zero until Spark finishes initialising a freshly built copy. */
+  splatCount: number;
+  /** Extent in the object's own space, for snapping and framing. */
+  bounds: Box3;
+  hidden: boolean;
 }
 
 /** Why the last click did not end in a selection — the two failures look identical
@@ -54,6 +72,9 @@ export class Segments extends EventTarget {
   private selectionValue?: SelectionState;
   private outcomeValue: PickOutcome = 'none';
   private hoverValue?: { groupId: number; indices: Uint32Array };
+  private activeLayerValue?: SegmentLayer;
+  private isolatedValue?: SegmentLayer;
+  private nextId = 1;
 
   constructor(private readonly viewer: Viewer) {
     super();
@@ -90,11 +111,17 @@ export class Segments extends EventTarget {
    */
   private onClick(event: MouseEvent): void {
     const raycaster = this.viewer.raycasterFor(event);
-    if (raycaster && this.layers.length > 0) {
-      const meshes = this.layers.map((layer) => layer.mesh);
-      const hit = raycaster.intersectObjects(meshes, false)[0];
+    const drawn = this.allLayers().filter(
+      (layer): layer is SegmentLayer & { mesh: SplatMesh } =>
+        layer.mesh !== undefined && layer.object.visible,
+    );
+    if (raycaster && drawn.length > 0) {
+      const hit = raycaster.intersectObjects(
+        drawn.map((layer) => layer.mesh),
+        false,
+      )[0];
       if (hit) {
-        const layer = this.layers.find((candidate) => candidate.mesh === hit.object);
+        const layer = drawn.find((candidate) => candidate.mesh === hit.object);
         if (layer) {
           this.dispatchEvent(new CustomEvent('layer-picked', { detail: layer }));
           return;
@@ -203,7 +230,7 @@ export class Segments extends EventTarget {
     const document = this.viewer.document;
     const selection = this.selectionValue;
     if (!document || !selection || selection.indices.length === 0) return undefined;
-    if (this.layers.some((layer) => layer.groupId === selection.groupId)) return undefined;
+    if (this.allLayers().some((layer) => layer.groupId === selection.groupId)) return undefined;
 
     const packed = document.mesh.packedSplats;
     if (!packed) return undefined;
@@ -249,27 +276,28 @@ export class Segments extends EventTarget {
     this.viewer.attach(mesh);
 
     const layer: SegmentLayer = {
+      id: this.nextId++,
       groupId: selection.groupId,
       name: selection.info.name,
+      object: mesh,
       mesh,
       indices: selection.indices,
+      children: [],
+      splatCount: selection.indices.length,
+      bounds: boundsOf(document.centres, selection.indices, centroid),
+      hidden: false,
     };
     this.layers.push(layer);
     this.selectionValue = undefined;
+    this.activate(layer);
     this.dispatchEvent(new Event('selection-changed'));
     this.dispatchEvent(new CustomEvent('layers-changed', { detail: layer }));
     return layer;
   }
 
-  /** Puts a split layer back where it came from. */
+  /** Puts a split layer back where it came from, along with anything nested in it. */
   mergeLayer(layer: SegmentLayer): void {
-    const document = this.viewer.document;
-    const at = this.layers.indexOf(layer);
-    if (at < 0) return;
-    this.layers.splice(at, 1);
-    this.viewer.detach(layer.mesh);
-    layer.mesh.dispose();
-    document?.restore(layer.indices);
+    this.dropLayer(layer, true);
     this.dispatchEvent(new Event('layers-changed'));
   }
 
@@ -278,11 +306,256 @@ export class Segments extends EventTarget {
    * compaction happens at export, so this remains undoable until then.
    */
   deleteLayer(layer: SegmentLayer): void {
-    const at = this.layers.indexOf(layer);
+    this.dropLayer(layer, false);
+    this.dispatchEvent(new Event('layers-changed'));
+  }
+
+  /** Takes a layer out of the scene, optionally giving its splats back to the scan. */
+  private dropLayer(layer: SegmentLayer, restore: boolean): void {
+    for (const child of [...layer.children]) this.dropLayer(child, restore);
+    const siblings = this.siblingsOf(layer);
+    const at = siblings.indexOf(layer);
+    if (at >= 0) siblings.splice(at, 1);
+    if (this.activeLayerValue === layer) this.activate(undefined);
+    if (this.isolatedValue === layer) this.isolate(undefined);
+    layer.object.removeFromParent();
+    this.viewer.detach(layer.object);
+    layer.mesh?.dispose();
+    // Only the original lift-out has splats hidden on its behalf; see SegmentLayer.
+    if (restore && layer.indices) this.viewer.document?.restore(layer.indices);
+  }
+
+  private siblingsOf(layer: SegmentLayer): SegmentLayer[] {
+    const parent = this.allLayers().find((candidate) => candidate.children.includes(layer));
+    return parent ? parent.children : this.layers;
+  }
+
+  /** Every layer in the scene, parents before their children. */
+  allLayers(): SegmentLayer[] {
+    const flat: SegmentLayer[] = [];
+    const walk = (layers: readonly SegmentLayer[]): void => {
+      for (const layer of layers) {
+        flat.push(layer);
+        walk(layer.children);
+      }
+    };
+    walk(this.layers);
+    return flat;
+  }
+
+  /** The object the gizmo is on, and that the object tools act upon. */
+  get activeLayer(): SegmentLayer | undefined {
+    return this.activeLayerValue;
+  }
+
+  get isolated(): SegmentLayer | undefined {
+    return this.isolatedValue;
+  }
+
+  activate(layer: SegmentLayer | undefined): void {
+    if (this.activeLayerValue === layer) return;
+    this.activeLayerValue = layer;
+    this.dispatchEvent(new Event('active-changed'));
+  }
+
+  rename(layer: SegmentLayer, name: string): void {
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === layer.name) return;
+    layer.name = trimmed;
+    this.dispatchEvent(new Event('layers-changed'));
+  }
+
+  setHidden(layer: SegmentLayer, hidden: boolean): void {
+    layer.hidden = hidden;
+    layer.object.visible = !hidden;
+    this.dispatchEvent(new Event('layers-changed'));
+  }
+
+  /**
+   * Copies an object, offset by a fraction of its own size so the copy is visible
+   * rather than hidden inside the original.
+   */
+  duplicate(layer: SegmentLayer, offset?: Vector3): SegmentLayer | undefined {
+    const copy = this.copyOf(layer);
+    if (!copy) return undefined;
+    const step = offset ?? new Vector3(layer.bounds.getSize(new Vector3()).x * 1.2, 0, 0);
+    copy.object.position.copy(layer.object.position).add(step);
+    copy.object.quaternion.copy(layer.object.quaternion);
+    copy.object.scale.copy(layer.object.scale);
+    copy.object.updateMatrixWorld(true);
+    this.siblingsOf(layer).push(copy);
+    this.dispatchEvent(new Event('layers-changed'));
+    return copy;
+  }
+
+  /** Duplicates an object `count` times along a step vector — one chair becomes a row. */
+  arrayCopies(layer: SegmentLayer, count: number, step?: Vector3): SegmentLayer[] {
+    const spacing = step ?? new Vector3(layer.bounds.getSize(new Vector3()).x * 1.2, 0, 0);
+    const made: SegmentLayer[] = [];
+    for (let n = 1; n <= Math.max(1, Math.round(count)); n += 1) {
+      const copy = this.duplicate(layer, spacing.clone().multiplyScalar(n));
+      if (copy) made.push(copy);
+    }
+    return made;
+  }
+
+  /** Deep-copies a layer's splats and its nested children into a new layer. */
+  private copyOf(layer: SegmentLayer): SegmentLayer | undefined {
+    const object: Object3D | undefined = layer.mesh ? this.copyMesh(layer.mesh) : new Group();
+    if (!object) return undefined;
+    const copy: SegmentLayer = {
+      id: this.nextId++,
+      name: this.copyName(layer.name),
+      object,
+      ...(object instanceof SplatMesh ? { mesh: object } : {}),
+      children: [],
+      splatCount: layer.splatCount,
+      bounds: layer.bounds.clone(),
+      hidden: false,
+    };
+    for (const child of layer.children) {
+      const childCopy = this.copyOf(child);
+      if (!childCopy) continue;
+      childCopy.object.position.copy(child.object.position);
+      childCopy.object.quaternion.copy(child.object.quaternion);
+      childCopy.object.scale.copy(child.object.scale);
+      object.add(childCopy.object);
+      copy.children.push(childCopy);
+    }
+    if (!object.parent) this.viewer.attach(object);
+    return copy;
+  }
+
+  /**
+   * Names a copy so a row of them reads as a row. Group names already end in a number,
+   * so the counter goes in a suffix of its own rather than straight onto the name.
+   */
+  private copyName(name: string): string {
+    const root = name.replace(/ \(copy(?: \d+)?\)$/, '');
+    const taken = new Set(this.allLayers().map((layer) => layer.name));
+    if (!taken.has(`${root} (copy)`)) return `${root} (copy)`;
+    for (let n = 2; ; n += 1) {
+      if (!taken.has(`${root} (copy ${n})`)) return `${root} (copy ${n})`;
+    }
+  }
+
+  private copyMesh(mesh: SplatMesh): SplatMesh | undefined {
+    const source = mesh.packedSplats;
+    if (!source?.packedArray) return undefined;
+    // A duplicate owns its own splat data. Sharing the array would be cheaper, but then
+    // editing one copy would edit them all, which is not what "duplicate" means.
+    const packed = new PackedSplats({
+      packedArray: source.packedArray.slice(),
+      numSplats: source.numSplats,
+      ...(source.splatEncoding ? { splatEncoding: source.splatEncoding } : {}),
+    });
+    packed.needsUpdate = true;
+    return new SplatMesh({ packedSplats: packed });
+  }
+
+  /**
+   * Nests several objects under one, so the gizmo moves them together.
+   *
+   * The group sits at the centre of what it holds rather than at the scene origin, for
+   * the same reason a lifted-out segment does: a gizmo somewhere else entirely, and a
+   * rotation that swings rather than spins, is not a usable handle.
+   */
+  groupLayers(members: readonly SegmentLayer[]): SegmentLayer | undefined {
+    const chosen = members.filter((layer) => this.allLayers().includes(layer));
+    if (chosen.length < 2) return undefined;
+
+    const parent = new Group();
+    const centre = new Vector3();
+    for (const layer of chosen) {
+      layer.object.updateMatrixWorld(true);
+      centre.add(layer.object.getWorldPosition(new Vector3()));
+    }
+    centre.divideScalar(chosen.length);
+    parent.position.copy(centre);
+    this.viewer.attach(parent);
+    parent.updateMatrixWorld(true);
+
+    const bounds = new Box3();
+    for (const layer of chosen) {
+      const siblings = this.siblingsOf(layer);
+      const at = siblings.indexOf(layer);
+      if (at >= 0) siblings.splice(at, 1);
+      // `attach` keeps the child where it is on screen while changing its parent.
+      parent.attach(layer.object);
+      bounds.union(layer.bounds.clone().translate(layer.object.position));
+    }
+
+    const group: SegmentLayer = {
+      id: this.nextId++,
+      name: `Group of ${chosen.length}`,
+      object: parent,
+      children: [...chosen],
+      splatCount: chosen.reduce((total, layer) => total + layer.splatCount, 0),
+      bounds,
+      hidden: false,
+    };
+    this.layers.push(group);
+    this.activate(group);
+    this.dispatchEvent(new Event('layers-changed'));
+    return group;
+  }
+
+  /** Lifts a grouping's children back out to its own level and discards the grouping. */
+  ungroup(layer: SegmentLayer): void {
+    if (layer.children.length === 0) return;
+    const siblings = this.siblingsOf(layer);
+    const at = siblings.indexOf(layer);
     if (at < 0) return;
-    this.layers.splice(at, 1);
-    this.viewer.detach(layer.mesh);
-    layer.mesh.dispose();
+    const parentObject = this.parentObjectFor(siblings);
+    for (const child of [...layer.children]) {
+      // `attach` preserves world placement across the reparent; the scene root is the
+      // parent when the grouping was top level.
+      this.viewer.attachTo(child.object, parentObject);
+      siblings.push(child);
+    }
+    layer.children.length = 0;
+    siblings.splice(siblings.indexOf(layer), 1);
+    if (this.activeLayerValue === layer) this.activate(undefined);
+    layer.object.removeFromParent();
+    this.viewer.detach(layer.object);
+    this.dispatchEvent(new Event('layers-changed'));
+  }
+
+  private parentObjectFor(siblings: SegmentLayer[]): Object3D | undefined {
+    if (siblings === this.layers) return undefined;
+    return this.allLayers().find((candidate) => candidate.children === siblings)?.object;
+  }
+
+  /**
+   * Shows one object alone. Everything else — the scan and every other layer — is hidden
+   * rather than removed, so leaving isolation is a second click and not an undo.
+   */
+  isolate(layer: SegmentLayer | undefined): void {
+    this.isolatedValue = layer;
+    const document = this.viewer.document;
+    if (document) document.mesh.visible = layer === undefined;
+    for (const candidate of this.allLayers()) {
+      const visible = layer === undefined || candidate === layer || this.contains(layer, candidate);
+      candidate.object.visible = visible && !candidate.hidden;
+    }
+    this.dispatchEvent(new Event('layers-changed'));
+  }
+
+  private contains(parent: SegmentLayer, candidate: SegmentLayer): boolean {
+    return parent.children.some((child) => child === candidate || this.contains(child, candidate));
+  }
+
+  /**
+   * Drops an object until it rests on the ground plane the grid is drawn on. Placing a
+   * lifted-out object by eye is the one thing an orbit camera makes genuinely hard,
+   * because depth along the view direction is invisible.
+   */
+  snapToFloor(layer: SegmentLayer): void {
+    layer.object.updateMatrixWorld(true);
+    const world = layer.bounds.clone().applyMatrix4(layer.object.matrixWorld);
+    if (world.isEmpty()) return;
+    layer.object.position.y += this.viewer.floorY - world.min.y;
+    layer.object.updateMatrixWorld(true);
     this.dispatchEvent(new Event('layers-changed'));
   }
 
@@ -339,15 +612,30 @@ export class Segments extends EventTarget {
   }
 
   private reset(): void {
-    for (const layer of this.layers) {
-      this.viewer.detach(layer.mesh);
-      layer.mesh.dispose();
+    for (const layer of this.allLayers()) {
+      layer.object.removeFromParent();
+      this.viewer.detach(layer.object);
+      layer.mesh?.dispose();
     }
     this.layers.length = 0;
     this.selectionValue = undefined;
     this.hoverValue = undefined;
+    this.activeLayerValue = undefined;
+    this.isolatedValue = undefined;
+    this.dispatchEvent(new Event('active-changed'));
     this.dispatchEvent(new Event('groups-changed'));
     this.dispatchEvent(new Event('selection-changed'));
     this.dispatchEvent(new Event('layers-changed'));
   }
+}
+
+/** Extent of a set of splats about their own centroid, in the layer's own space. */
+function boundsOf(centres: Float32Array, indices: Uint32Array, centroid: Vector3): Box3 {
+  const box = new Box3();
+  const point = new Vector3();
+  for (const index of indices) {
+    point.set(centres[index * 3]!, centres[index * 3 + 1]!, centres[index * 3 + 2]!).sub(centroid);
+    box.expandByPoint(point);
+  }
+  return box;
 }

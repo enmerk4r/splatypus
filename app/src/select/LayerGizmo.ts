@@ -3,7 +3,7 @@ import type { Viewer } from '../viewer/Viewer';
 import type { SegmentLayer } from './Segments';
 
 /**
- * Gizmo for moving a split segment. Moving a layer is a transform on its `Object3D` —
+ * Gizmo for moving an object. Moving one is a transform on its `Object3D` —
  * Spark re-sorts and the splat data is untouched — so this needs no bake step.
  */
 export class LayerGizmo {
@@ -24,7 +24,7 @@ export class LayerGizmo {
 
   attach(layer: SegmentLayer | undefined): void {
     this.attachedLayer = layer;
-    if (layer) this.controls.attach(layer.mesh);
+    if (layer) this.controls.attach(layer.object);
     else this.controls.detach();
   }
 

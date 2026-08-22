@@ -57,13 +57,9 @@ async function bootstrap(): Promise<void> {
   const segments = new Segments(viewer);
   const overlay = new GroupOverlay(viewer, segments);
   const gizmo = new LayerGizmo(viewer);
-  const segmentsPanel = createSegmentsPanel(
-    element('segments'),
-    viewer,
-    segments,
-    overlay,
-    (layer) => gizmo.attach(layer),
-  );
+  const segmentsPanel = createSegmentsPanel(element('segments'), viewer, segments, overlay);
+  // One notion of "the object being edited", shared by the gizmo and the outliner.
+  segments.addEventListener('active-changed', () => gizmo.attach(segments.activeLayer));
   const hoverLabel = createHoverLabel(element('hover-label'), segments);
   let loadSequence = 0;
 

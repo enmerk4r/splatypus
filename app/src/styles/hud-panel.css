@@ -106,7 +106,7 @@
   bottom: 18px;
   z-index: 4;
   width: min(280px, calc(100vw - 36px));
-  max-height: min(46vh, 420px);
+  max-height: min(62vh, 560px);
   overflow-y: auto;
   padding: 13px 14px;
   border: 1px solid var(--line);
@@ -251,4 +251,31 @@
 
 .segments-view input:disabled {
   opacity: 0.4;
+}
+
+.segments-tools {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+  margin-top: 10px;
+}
+
+.segments-tools button[aria-pressed='true'] {
+  border-color: var(--lime);
+  color: var(--lime);
+}
+
+.segments-layers li {
+  align-items: center;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+}
+
+.segments-layers li.is-active .segments-layer-name {
+  border-color: var(--lime);
+  color: var(--lime);
+}
+
+.segments-layers input[type='checkbox'] {
+  margin: 0;
+  accent-color: var(--lime);
 }

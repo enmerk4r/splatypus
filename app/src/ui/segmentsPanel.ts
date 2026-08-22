@@ -12,7 +12,6 @@ export function createSegmentsPanel(
   viewer: Viewer,
   segments: Segments,
   overlay: GroupOverlay,
-  onSelectLayer: (layer: SegmentLayer | undefined) => void,
 ): { dispose: () => void } {
   host.innerHTML = `
     <h2 class="segments-title">Segments</h2>
@@ -37,6 +36,20 @@ export function createSegmentsPanel(
       <button type="button" id="segments-split">Split to layer</button>
       <button type="button" id="segments-clear">Clear</button>
     </div>
+    <div class="segments-tools" hidden id="segments-tools">
+      <button type="button" id="tool-duplicate" title="Copy this object">Duplicate</button>
+      <button type="button" id="tool-array" title="Copy it four more times in a row">
+        Array ×5
+      </button>
+      <button type="button" id="tool-isolate" title="Hide everything else">Isolate</button>
+      <button type="button" id="tool-floor" title="Drop it onto the ground plane">
+        Snap to floor
+      </button>
+      <button type="button" id="tool-group" title="Nest the ticked objects under one">
+        Group
+      </button>
+      <button type="button" id="tool-ungroup" title="Dissolve this grouping">Ungroup</button>
+    </div>
     <ul class="segments-layers" id="segments-layers"></ul>
   `;
 
@@ -51,6 +64,13 @@ export function createSegmentsPanel(
   const rebakeButton = host.querySelector<HTMLButtonElement>('#segments-rebake')!;
   const overlayButton = host.querySelector<HTMLButtonElement>('#segments-overlay')!;
   const blendInput = host.querySelector<HTMLInputElement>('#segments-blend')!;
+  const tools = host.querySelector<HTMLDivElement>('#segments-tools')!;
+  const tool = (name: string): HTMLButtonElement =>
+    host.querySelector<HTMLButtonElement>(`#tool-${name}`)!;
+  const isolateButton = tool('isolate');
+
+  /** Objects ticked in the outliner, by id — what Group acts on. */
+  const ticked = new Set<number>();
 
   /** The sidecar that came with the scene, kept so the user can go back to it. */
   let sidecar: GroupMap | undefined;
@@ -112,38 +132,74 @@ export function createSegmentsPanel(
     );
   };
 
+  /** One row per object, nested to show groupings, with the active one marked. */
   const renderLayers = (): void => {
     layerList.replaceChildren();
-    for (const layer of segments.segmentLayers) {
-      const item = document.createElement('li');
+    const active = segments.activeLayer;
+    const rows = (layers: readonly SegmentLayer[], depth: number): void => {
+      for (const layer of layers) {
+        const item = document.createElement('li');
+        item.style.paddingLeft = `${depth * 12}px`;
+        if (layer === active) item.classList.add('is-active');
 
-      const select = document.createElement('button');
-      select.type = 'button';
-      select.className = 'segments-layer-name';
-      select.textContent = `${layer.name} · ${layer.indices.length.toLocaleString()}`;
-      select.addEventListener('click', () => onSelectLayer(layer));
+        const tick = document.createElement('input');
+        tick.type = 'checkbox';
+        tick.title = 'Include in the next Group';
+        tick.checked = ticked.has(layer.id);
+        tick.addEventListener('change', () => {
+          if (tick.checked) ticked.add(layer.id);
+          else ticked.delete(layer.id);
+          renderTools();
+        });
 
-      const merge = document.createElement('button');
-      merge.type = 'button';
-      merge.title = 'Put these splats back into the scan';
-      merge.textContent = 'Merge';
-      merge.addEventListener('click', () => {
-        onSelectLayer(undefined);
-        segments.mergeLayer(layer);
-      });
+        const select = document.createElement('button');
+        select.type = 'button';
+        select.className = 'segments-layer-name';
+        const size = layer.children.length
+          ? `${layer.children.length} objects`
+          : layer.splatCount.toLocaleString();
+        select.textContent = `${layer.name} · ${size}`;
+        select.addEventListener('click', () => segments.activate(layer));
+        // Renaming in place; the outliner is where an object gets an identity.
+        select.addEventListener('dblclick', () => {
+          const name = window.prompt('Rename object', layer.name);
+          if (name !== null) segments.rename(layer, name);
+        });
 
-      const remove = document.createElement('button');
-      remove.type = 'button';
-      remove.title = 'Take these splats out of the scene';
-      remove.textContent = 'Delete';
-      remove.addEventListener('click', () => {
-        onSelectLayer(undefined);
-        segments.deleteLayer(layer);
-      });
+        const eye = document.createElement('button');
+        eye.type = 'button';
+        eye.title = layer.hidden ? 'Show' : 'Hide';
+        eye.textContent = layer.hidden ? '○' : '●';
+        eye.addEventListener('click', () => segments.setHidden(layer, !layer.hidden));
 
-      item.append(select, merge, remove);
-      layerList.append(item);
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.title = 'Take these splats out of the scene';
+        remove.textContent = '✕';
+        remove.addEventListener('click', () => segments.deleteLayer(layer));
+
+        item.append(tick, select, eye, remove);
+        layerList.append(item);
+        rows(layer.children, depth + 1);
+      }
+    };
+    rows(segments.segmentLayers, 0);
+  };
+
+  const tickedLayers = (): SegmentLayer[] =>
+    segments.allLayers().filter((layer) => ticked.has(layer.id));
+
+  const renderTools = (): void => {
+    const active = segments.activeLayer;
+    tools.hidden = segments.segmentLayers.length === 0;
+    for (const name of ['duplicate', 'array', 'isolate', 'floor', 'ungroup']) {
+      tool(name).disabled = active === undefined;
     }
+    tool('ungroup').disabled = !active || active.children.length === 0;
+    tool('group').disabled = tickedLayers().length < 2;
+    isolateButton.textContent = segments.isolated ? 'Show all' : 'Isolate';
+    isolateButton.setAttribute('aria-pressed', String(segments.isolated !== undefined));
+    isolateButton.disabled = active === undefined && segments.isolated === undefined;
   };
 
   const syncSidecarOption = (): void => {
@@ -161,16 +217,17 @@ export function createSegmentsPanel(
     renderOverlay();
     renderSelection();
     renderLayers();
+    renderTools();
   };
   const onOverlayToggle = (): void => overlay.setEnabled(!overlay.enabled);
   const onBlendInput = (): void => overlay.setBlend(Number(blendInput.value) / 100);
   const onLayersChanged = (): void => {
     renderSelection();
     renderLayers();
+    renderTools();
   };
   const onSplit = (): void => {
-    const layer = segments.splitSelection();
-    if (layer) onSelectLayer(layer);
+    segments.splitSelection();
   };
   const onClear = (): void => segments.select(undefined);
 
@@ -194,12 +251,43 @@ export function createSegmentsPanel(
   };
 
   const onLayerPicked = (event: Event): void => {
-    onSelectLayer((event as CustomEvent<SegmentLayer>).detail);
+    segments.activate((event as CustomEvent<SegmentLayer>).detail);
+  };
+
+  const onDuplicate = (): void => {
+    const active = segments.activeLayer;
+    if (active) segments.activate(segments.duplicate(active));
+  };
+  const onArray = (): void => {
+    const active = segments.activeLayer;
+    if (active) segments.arrayCopies(active, 4);
+  };
+  const onIsolate = (): void => {
+    segments.isolate(segments.isolated ? undefined : segments.activeLayer);
+  };
+  const onFloor = (): void => {
+    const active = segments.activeLayer;
+    if (active) segments.snapToFloor(active);
+  };
+  const onGroup = (): void => {
+    const made = segments.groupLayers(tickedLayers());
+    if (made) ticked.clear();
+  };
+  const onUngroup = (): void => {
+    const active = segments.activeLayer;
+    if (active) segments.ungroup(active);
   };
 
   overlay.addEventListener('overlay-changed', renderOverlay);
   overlayButton.addEventListener('click', onOverlayToggle);
   blendInput.addEventListener('input', onBlendInput);
+  tool('duplicate').addEventListener('click', onDuplicate);
+  tool('array').addEventListener('click', onArray);
+  tool('isolate').addEventListener('click', onIsolate);
+  tool('floor').addEventListener('click', onFloor);
+  tool('group').addEventListener('click', onGroup);
+  tool('ungroup').addEventListener('click', onUngroup);
+  segments.addEventListener('active-changed', onLayersChanged);
   segments.addEventListener('layer-picked', onLayerPicked);
   segments.addEventListener('selection-changed', onSelectionChanged);
   segments.addEventListener('layers-changed', onLayersChanged);
@@ -215,6 +303,13 @@ export function createSegmentsPanel(
       overlay.removeEventListener('overlay-changed', renderOverlay);
       overlayButton.removeEventListener('click', onOverlayToggle);
       blendInput.removeEventListener('input', onBlendInput);
+      tool('duplicate').removeEventListener('click', onDuplicate);
+      tool('array').removeEventListener('click', onArray);
+      tool('isolate').removeEventListener('click', onIsolate);
+      tool('floor').removeEventListener('click', onFloor);
+      tool('group').removeEventListener('click', onGroup);
+      tool('ungroup').removeEventListener('click', onUngroup);
+      segments.removeEventListener('active-changed', onLayersChanged);
       segments.removeEventListener('layer-picked', onLayerPicked);
       segments.removeEventListener('selection-changed', onSelectionChanged);
       segments.removeEventListener('layers-changed', onLayersChanged);

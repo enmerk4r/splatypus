@@ -217,6 +217,15 @@ export class Viewer extends EventTarget {
     this.scene.remove(object);
   }
 
+  /**
+   * Reparents an object without moving it on screen. `Object3D.attach` compensates for
+   * the change of parent transform, which `add` does not — the difference matters
+   * whenever a grouping is dissolved under a parent that is itself transformed.
+   */
+  attachTo(object: Object3D, parent: Object3D | undefined): void {
+    (parent ?? this.scene).attach(object);
+  }
+
   private applyOrientation(): void {
     if (!this.documentValue) return;
     // Only the mesh transform changes; file coordinates are preserved for later export.
@@ -235,7 +244,14 @@ export class Viewer extends EventTarget {
     mesh.updateMatrixWorld(true);
   }
 
+  /** Height of the ground plane the grid is drawn on, in world space. */
+  get floorY(): number {
+    return this.floorYValue;
+  }
+  private floorYValue = 0;
+
   private resetHelpers(center: Vector3, radius: number, floorY: number): void {
+    this.floorYValue = floorY;
     this.disposeHelpers();
     this.grid = new GridHelper(radius * 4, 20, 0x52616d, 0x263139);
     this.grid.position.set(center.x, floorY, center.z);
