@@ -36,7 +36,9 @@ export class Viewer extends EventTarget {
   private grid?: GridHelper;
   private axes?: AxesHelper;
   private gridVisible = true;
-  private axesVisible = true;
+  // Off by default: the axes cross the middle of most scenes, right where the object
+  // being edited and its gizmo are.
+  private axesVisible = false;
   private upAxisValue: UpAxis = 'y-down';
   private renderScale = 1;
   private lastFrame = performance.now();

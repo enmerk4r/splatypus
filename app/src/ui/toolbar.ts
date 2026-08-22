@@ -48,7 +48,6 @@ export function createToolbar(
 
   const render = (): void => {
     const active = segments.activeLayer;
-    host.hidden = segments.segmentLayers.length === 0;
     for (const name of ['duplicate', 'array', 'floor', 'merge', 'delete']) {
       op(name).disabled = active === undefined;
     }

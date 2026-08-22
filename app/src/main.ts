@@ -104,6 +104,7 @@ async function bootstrap(): Promise<void> {
     onExport: exportScene,
   });
   const collapses = [
+    wireCollapse(element('hud'), element('hud-collapse'), element('hud-body')),
     wireCollapse(element('library'), element('library-collapse'), element('library-body')),
     wireCollapse(
       element('inspector'),
@@ -170,6 +171,7 @@ async function bootstrap(): Promise<void> {
       emptyState.hidden = true;
       element('library').hidden = false;
       element('inspector').hidden = false;
+      element('toolbar').hidden = false;
       const info = loaded.pointCloud;
       if (info && info.stride > 1) {
         hud.toast(

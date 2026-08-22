@@ -1,10 +1,18 @@
-.hud {
+/* The readout and the scene panel are one stack, not two floating boxes: same width,
+   flush, sharing the line between them. */
+.rail {
   position: absolute;
   top: 18px;
   left: 18px;
   z-index: 4;
-  width: min(300px, calc(100vw - 36px));
-  padding: 13px 14px;
+  display: flex;
+  width: min(268px, calc(100vw - 36px));
+  max-height: calc(100vh - 116px);
+  flex-direction: column;
+}
+
+.hud {
+  flex: none;
   border: 1px solid var(--line);
   border-radius: 5px;
   background: var(--panel);
@@ -14,11 +22,31 @@
   font-size: 10px;
 }
 
+.hud .panel-body {
+  padding: 12px 14px;
+}
+
+/* Square off the join so the pair reads as one panel, but only while both are shown. */
+.rail:has(#library:not([hidden])) .hud {
+  border-bottom-right-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.rail #library {
+  border-top-right-radius: 0;
+  border-top-left-radius: 0;
+  /* Overlap the borders so the seam is one line rather than two. */
+  margin-top: -1px;
+}
+
 .brand {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 13px;
+  padding: 9px 0 9px 12px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
   font-weight: 800;
   letter-spacing: 0.15em;
 }
@@ -126,7 +154,8 @@
   text-transform: uppercase;
 }
 
-.panel-collapse {
+/* Wins over the generic panel-button rule below, which would give the chevron a box. */
+.panel-head .panel-collapse {
   flex: none;
   width: 22px;
   height: 22px;
@@ -134,11 +163,12 @@
   border: 0;
   border-radius: 3px;
   background: transparent;
+  color: inherit;
   cursor: pointer;
 }
 
 /* A chevron drawn from a rotated corner, so there is no glyph to load or align. */
-.panel-collapse::before {
+.panel-head .panel-collapse::before {
   display: block;
   width: 6px;
   height: 6px;
@@ -149,7 +179,7 @@
   transform: translateY(-2px) rotate(225deg);
 }
 
-.panel-collapse[aria-expanded='false']::before {
+.panel-head .panel-collapse[aria-expanded='false']::before {
   transform: translateY(-2px) rotate(45deg);
 }
 
@@ -242,10 +272,8 @@
 /* ---- left: the scene and how it is divided ---------------------------- */
 
 .library {
-  top: 232px;
-  left: 18px;
-  width: min(250px, calc(100vw - 36px));
-  max-height: calc(100vh - 330px);
+  position: static;
+  min-height: 0;
 }
 
 .library .panel-body {
@@ -253,8 +281,8 @@
   padding: 12px 14px;
 }
 
-.library.is-collapsed {
-  width: 148px;
+.rail.has-collapsed-hud {
+  width: auto;
 }
 
 .library-file,

@@ -31,7 +31,7 @@ export function createPanel(
   const settings: PanelSettings = {
     background: '#111111',
     grid: true,
-    axes: true,
+    axes: false,
     upAxis: viewer.upAxis,
     cameraMode: viewer.cameraRig.mode,
     fov: 60,
