@@ -114,7 +114,9 @@ Integration background: [docs/SEGMENTATION_NOTES.md](docs/SEGMENTATION_NOTES.md)
 
 ## Export
 
-Use **EXPORT .PLY** in the HUD or `Ctrl/Cmd+E`. The dialog can include hidden layers and spherical harmonics. Output is binary little-endian standard 3DGS PLY and includes only live splats. Chrome uses the File System Access API when available; Firefox and Safari use a local download fallback.
+Use **EXPORT** in the HUD or `Ctrl/Cmd+E`. Choose **Export Project** to write an editable `.splatypus` project containing the layer stack, transforms, visibility and lock state, live/deleted splats, segmentation groups, sketch strokes, selection, and camera/view state. Opening that file restores the editing workspace; undo/redo history starts empty.
+
+Choose **Export** when you need a standard interoperable PLY file. The dialog can include hidden layers and spherical harmonics. PLY output is binary little-endian standard 3DGS PLY and includes only live splats, so it intentionally flattens the editable project structure. Chrome uses the File System Access API when available; Firefox and Safari use a local download fallback.
 
 ## Coordinate convention
 

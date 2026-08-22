@@ -73,6 +73,20 @@ export class CameraRig extends EventTarget {
     this.dispatchEvent(new Event('speed-changed'));
   }
 
+  /** Restores persisted navigation state after the camera transform has been assigned. */
+  restore(mode: CameraMode, flySpeed: number, target: Vector3): void {
+    this.modeValue = mode;
+    this.speedMultiplier = Math.min(20, Math.max(0.05, flySpeed));
+    this.controls.target.copy(target);
+    this.controls.enabled = mode === 'orbit';
+    this.keys.clear();
+    this.dragging = false;
+    this.syncFlyRotation();
+    if (mode === 'orbit') this.controls.update();
+    this.dispatchEvent(new Event('mode-changed'));
+    this.dispatchEvent(new Event('speed-changed'));
+  }
+
   frame(bounds: RobustBounds): void {
     this.radius = bounds.radius;
     const offset = new Vector3(1, 0.6, 1).normalize().multiplyScalar(bounds.radius * 2.2);

@@ -3,6 +3,8 @@ import type { ToastLevel } from './hud';
 import { exportPly } from '../io/exportPly';
 import { estimateGaussianPlyBytes } from '../io/plyWriter';
 import { prepareSaveFile } from '../io/saveFile';
+import { writeProject } from '../io/projectFormat';
+import type { ProjectViewState } from '../io/projectFormat';
 
 function formatBytes(bytes: number): string {
   const units = ['B', 'KB', 'MB', 'GB'];
@@ -18,10 +20,16 @@ function exportName(document: Document): string {
   return `${base}-splatypus.ply`;
 }
 
+function projectName(document: Document): string {
+  const base = document.name.replace(/\.(?:ply|spz|splat|ksplat|sog|splatypus)$/i, '') || 'scene';
+  return `${base}.splatypus`;
+}
+
 export function createExportDialog(
   dialog: HTMLDialogElement,
   button: HTMLButtonElement,
   getDocument: () => Document | undefined,
+  getProjectViewState: () => ProjectViewState,
   toast: (message: string, level?: ToastLevel) => void,
 ): { open: () => void; dispose: () => void } {
   const form = dialog.querySelector<HTMLFormElement>('form')!;
@@ -30,6 +38,7 @@ export function createExportDialog(
   const estimate = dialog.querySelector<HTMLElement>('#export-estimate')!;
   const progress = dialog.querySelector<HTMLProgressElement>('#export-progress')!;
   const submit = dialog.querySelector<HTMLButtonElement>('#export-submit')!;
+  const saveProject = dialog.querySelector<HTMLButtonElement>('#project-save')!;
   const cancel = dialog.querySelector<HTMLButtonElement>('#export-cancel')!;
 
   const layersForEstimate = (document: Document) =>
@@ -93,9 +102,56 @@ export function createExportDialog(
       });
   };
   const close = (): void => dialog.close();
+  const onSaveProject = (): void => {
+    const document = getDocument();
+    if (!document) return;
+    const name = projectName(document);
+    const destination = prepareSaveFile(name, {
+      description: 'Splatypus editable project',
+      mimeType: 'application/x-splatypus',
+      extensions: ['.splatypus'],
+    });
+    submit.disabled = true;
+    saveProject.disabled = true;
+    cancel.disabled = true;
+    let buffer: ArrayBuffer;
+    try {
+      buffer = writeProject(document, getProjectViewState());
+    } catch (error) {
+      console.error(error);
+      toast(
+        `Project save failed: ${error instanceof Error ? error.message : String(error)}`,
+        'error',
+      );
+      submit.disabled = false;
+      saveProject.disabled = false;
+      cancel.disabled = false;
+      return;
+    }
+    void destination
+      .then((saveTo) => saveTo.save(new Blob([buffer], { type: 'application/x-splatypus' })))
+      .then(() => {
+        dialog.close();
+        toast(`Saved editable project as ${name}`);
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        console.error(error);
+        toast(
+          `Project save failed: ${error instanceof Error ? error.message : String(error)}`,
+          'error',
+        );
+      })
+      .finally(() => {
+        submit.disabled = false;
+        saveProject.disabled = false;
+        cancel.disabled = false;
+      });
+  };
   button.addEventListener('click', open);
   form.addEventListener('submit', onSubmit);
   cancel.addEventListener('click', close);
+  saveProject.addEventListener('click', onSaveProject);
   hidden.addEventListener('change', refresh);
   sh.addEventListener('change', refresh);
   return {
@@ -104,6 +160,7 @@ export function createExportDialog(
       button.removeEventListener('click', open);
       form.removeEventListener('submit', onSubmit);
       cancel.removeEventListener('click', close);
+      saveProject.removeEventListener('click', onSaveProject);
       hidden.removeEventListener('change', refresh);
       sh.removeEventListener('change', refresh);
     },

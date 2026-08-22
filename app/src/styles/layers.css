@@ -402,7 +402,8 @@
 }
 
 .scale-popover,
-.array-popover {
+.array-popover,
+.crop-popover {
   position: absolute;
   bottom: calc(100% + 10px);
   z-index: 2;
@@ -420,7 +421,8 @@
 }
 
 .scale-popover::after,
-.array-popover::after {
+.array-popover::after,
+.crop-popover::after {
   position: absolute;
   top: 100%;
   left: 50%;
@@ -490,6 +492,11 @@
   background: var(--lime);
   font-size: 9px;
   font-weight: 700;
+}
+
+.toolbar .crop-popover button {
+  width: 30px;
+  height: 30px;
 }
 
 .selection-popover {
@@ -649,11 +656,16 @@
   letter-spacing: 0.11em;
 }
 
+.export-dialog header strong {
+  font-size: 13px;
+  line-height: 1.25;
+}
+
 .export-dialog label {
   display: flex;
   align-items: center;
   gap: 9px;
-  font-size: 11px;
+  font-size: 10px;
 }
 
 .export-dialog progress {
@@ -675,6 +687,11 @@
   color: inherit;
   background: rgba(255, 255, 255, 0.06);
   cursor: pointer;
+  font-size: 10px;
+}
+
+.export-dialog footer #export-cancel {
+  margin-right: auto;
 }
 
 .export-dialog footer .primary {

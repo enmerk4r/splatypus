@@ -1,4 +1,3 @@
-import type { CropBox, CropMode } from '../select/CropBox';
 import type { BakeBasis, Segmentation } from '../select/Segmentation';
 import type { GroupMap } from '../splats/groups';
 import type { Viewer } from '../viewer/Viewer';
@@ -11,12 +10,11 @@ export interface SegmentPanelCallbacks {
 
 /**
  * SEGMENT panel: how the active layer is divided into groups (sidecar or in-app bake),
- * the group overlay, the current group selection with "Split to layer", and the crop box.
+ * the group overlay, and the current group selection with "Split to layer".
  */
 export function createSegmentPanel(
   viewer: Viewer,
   segmentation: Segmentation,
-  crop: CropBox,
   root: HTMLElement,
   callbacks: SegmentPanelCallbacks,
 ): { dispose: () => void } {
@@ -47,16 +45,6 @@ export function createSegmentPanel(
         <button type="button" id="segment-split" class="primary">Split to layer</button>
         <button type="button" id="segment-clear">Clear</button>
       </div>
-      <div class="layers-header segment-subhead">CROP</div>
-      <div class="segment-actions">
-        <button type="button" id="crop-toggle">Show crop box</button>
-        <button type="button" id="crop-move" aria-pressed="true">Move</button>
-        <button type="button" id="crop-resize" aria-pressed="false">Resize</button>
-      </div>
-      <div class="segment-actions">
-        <button type="button" id="crop-keep">Keep inside</button>
-        <button type="button" id="crop-cut">Cut inside</button>
-      </div>
     </div>
   `;
   const pick = <T extends HTMLElement>(id: string): T => root.querySelector<T>(`#${id}`)!;
@@ -68,11 +56,6 @@ export function createSegmentPanel(
   const status = pick<HTMLParagraphElement>('segment-status');
   const split = pick<HTMLButtonElement>('segment-split');
   const clear = pick<HTMLButtonElement>('segment-clear');
-  const cropToggle = pick<HTMLButtonElement>('crop-toggle');
-  const cropMove = pick<HTMLButtonElement>('crop-move');
-  const cropResize = pick<HTMLButtonElement>('crop-resize');
-  const cropKeep = pick<HTMLButtonElement>('crop-keep');
-  const cropCut = pick<HTMLButtonElement>('crop-cut');
 
   const summarise = (groups: GroupMap): string => {
     const covered = Math.round(groups.coverage * 100);
@@ -114,16 +97,6 @@ export function createSegmentPanel(
     } else {
       status.textContent = 'Select a layer to segment it.';
     }
-    cropToggle.textContent = crop.isActive ? 'Hide crop box' : 'Show crop box';
-    cropToggle.setAttribute('aria-pressed', String(crop.isActive));
-    for (const [button, mode] of [
-      [cropMove, 'translate'],
-      [cropResize, 'scale'],
-    ] as [HTMLButtonElement, CropMode][]) {
-      button.disabled = !crop.isActive;
-      button.setAttribute('aria-pressed', String(crop.mode === mode));
-    }
-    cropKeep.disabled = cropCut.disabled = !crop.isActive;
   };
 
   const onRebake = (): void => {
@@ -158,16 +131,6 @@ export function createSegmentPanel(
     }
   };
   const onClear = (): void => segmentation.select(undefined);
-  const onCropToggle = (): void => (crop.isActive ? crop.cancel() : crop.begin());
-  const onCropMove = (): void => crop.setMode('translate');
-  const onCropResize = (): void => crop.setMode('scale');
-  const runCrop = (keep: 'inside' | 'outside') => (): void => {
-    const hidden = crop.apply(keep);
-    if (hidden) callbacks.notify(`${hidden.toLocaleString()} splats hidden (Ctrl+Z to undo).`);
-    else callbacks.notify('Nothing to crop.', 'warning');
-  };
-  const onKeep = runCrop('inside');
-  const onCut = runCrop('outside');
 
   let observed = viewer.document;
   const observe = (): void => {
@@ -185,17 +148,11 @@ export function createSegmentPanel(
   segmentation.addEventListener('selection-changed', render);
   segmentation.addEventListener('groups-changed', render);
   segmentation.addEventListener('overlay-changed', render);
-  crop.addEventListener('crop-changed', render);
   rebake.addEventListener('click', onRebake);
   overlay.addEventListener('click', onOverlay);
   blend.addEventListener('input', onBlend);
   split.addEventListener('click', onSplit);
   clear.addEventListener('click', onClear);
-  cropToggle.addEventListener('click', onCropToggle);
-  cropMove.addEventListener('click', onCropMove);
-  cropResize.addEventListener('click', onCropResize);
-  cropKeep.addEventListener('click', onKeep);
-  cropCut.addEventListener('click', onCut);
   observe();
 
   return {
@@ -207,7 +164,6 @@ export function createSegmentPanel(
       segmentation.removeEventListener('selection-changed', render);
       segmentation.removeEventListener('groups-changed', render);
       segmentation.removeEventListener('overlay-changed', render);
-      crop.removeEventListener('crop-changed', render);
       shell.dispose();
     },
   };

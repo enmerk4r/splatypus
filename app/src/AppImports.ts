@@ -4,6 +4,7 @@ import { SplatStore } from './model/SplatStore';
 import { decodeFile } from './io/decode';
 import { loadSplat } from './io/loadSplat';
 import type { LoadOptions, SplatSource } from './io/loadSplat';
+import { readProject } from './io/projectFormat';
 import type { Hud } from './ui/hud';
 import type { Viewer } from './viewer/Viewer';
 import { LOD_ABOVE_SPLATS } from './viewer/sync';
@@ -49,6 +50,41 @@ export class AppImports {
       this.hud.setError();
       this.hud.toast(
         error instanceof Error ? error.message : 'The splat could not be opened.',
+        'error',
+      );
+      this.emptyState.hidden = Boolean(this.viewer.document);
+    } finally {
+      if (sequence === this.sequence) this.emptyState.classList.remove('loading');
+    }
+  }
+
+  async openProject(file: File): Promise<void> {
+    if (!(await this.allowReplace())) return;
+    const sequence = ++this.sequence;
+    this.emptyState.classList.add('loading');
+    this.hud.setProgress({ phase: 'loading', loaded: 0, total: file.size });
+    try {
+      const restored = readProject(await file.arrayBuffer());
+      if (sequence !== this.sequence) {
+        restored.document.dispose();
+        return;
+      }
+      await Promise.all(restored.document.layers.map((layer) => layer.sync()));
+      if (sequence !== this.sequence) {
+        restored.document.dispose();
+        return;
+      }
+      this.viewer.setDocument(restored.document, false);
+      this.viewer.restoreProjectViewState(restored.view);
+      this.emptyState.hidden = true;
+      this.hud.setReady();
+      this.hud.toast(`Opened editable project “${restored.document.name}”.`);
+    } catch (error) {
+      if (sequence !== this.sequence) return;
+      console.error(error);
+      this.hud.setError();
+      this.hud.toast(
+        error instanceof Error ? error.message : 'The project could not be opened.',
         'error',
       );
       this.emptyState.hidden = Boolean(this.viewer.document);

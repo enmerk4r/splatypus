@@ -153,18 +153,19 @@ async function bootstrap(): Promise<void> {
     onAdd: () => addInput.click(),
     notify: (message, level) => hud.toast(message, level),
   });
-  const segmentPanel = createSegmentPanel(viewer, segmentation, crop, element('segment-panel'), {
+  const segmentPanel = createSegmentPanel(viewer, segmentation, element('segment-panel'), {
     notify: (message, level) => hud.toast(message, level),
   });
   const sketchPanel = createSketchPanel(viewer, sketchSettings, element('sketch-panel'));
   const hoverLabel = createHoverLabel(element('hover-label'), segmentation);
-  const toolbar = createToolbar(viewer, segmentation, element('toolbar'), {
+  const toolbar = createToolbar(viewer, segmentation, crop, element('toolbar'), {
     notify: (message, level) => hud.toast(message, level),
   });
   const exportDialog = createExportDialog(
     element<HTMLDialogElement>('export-dialog'),
     element<HTMLButtonElement>('export-file'),
     () => viewer.document,
+    () => viewer.projectViewState(),
     (message, level) => hud.toast(message, level),
   );
   const disposeDrop = wireFileInput(
@@ -174,6 +175,7 @@ async function bootstrap(): Promise<void> {
     element('drag-overlay'),
     {
       onOpen: (file) => void imports.open({ kind: 'file', file }),
+      onProject: (file) => void imports.openProject(file),
       onAdd: (files) => void imports.add(files),
       onGroups: (file) => void attachGroups(file),
       onError: (message, level) => hud.toast(message, level ?? 'error'),

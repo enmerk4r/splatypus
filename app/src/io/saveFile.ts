@@ -11,8 +11,23 @@ export interface SaveDestination {
   save(blob: Blob): Promise<void>;
 }
 
+export interface SaveFileType {
+  description: string;
+  mimeType: string;
+  extensions: string[];
+}
+
+const PLY_TYPE: SaveFileType = {
+  description: '3D Gaussian Splat PLY',
+  mimeType: 'application/octet-stream',
+  extensions: ['.ply'],
+};
+
 /** Call this directly from a click/submit handler so native pickers retain user activation. */
-export function prepareSaveFile(name: string): Promise<SaveDestination> {
+export function prepareSaveFile(
+  name: string,
+  type: SaveFileType = PLY_TYPE,
+): Promise<SaveDestination> {
   const picker = (window as SavePickerWindow).showSaveFilePicker;
   if (picker) {
     return picker
@@ -20,8 +35,8 @@ export function prepareSaveFile(name: string): Promise<SaveDestination> {
         suggestedName: name,
         types: [
           {
-            description: '3D Gaussian Splat PLY',
-            accept: { 'application/octet-stream': ['.ply'] },
+            description: type.description,
+            accept: { [type.mimeType]: type.extensions },
           },
         ],
       })

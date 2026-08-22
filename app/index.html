@@ -36,7 +36,7 @@
         id="file-input"
         class="sr-only"
         type="file"
-        accept=".ply,.spz,.splat,.ksplat,.sog,.groups"
+        accept=".splatypus,.ply,.spz,.splat,.ksplat,.sog,.groups"
       />
       <input
         id="add-file-input"
@@ -75,7 +75,7 @@
         <div id="progress-track" class="progress-track" hidden>
           <div id="progress-bar" class="progress-bar"></div>
         </div>
-        <button id="export-file" class="hud-export" type="button">EXPORT .PLY</button>
+        <button id="export-file" class="hud-export" type="button">EXPORT</button>
       </aside>
 
       <div class="right-rail">
@@ -105,7 +105,7 @@
         <form method="dialog">
           <header>
             <span>EXPORT</span>
-            <strong>STANDARD 3DGS PLY</strong>
+            <strong>PLY OR EDITABLE PROJECT</strong>
           </header>
           <label><input id="export-hidden" type="checkbox" /> Include hidden layers</label>
           <label
@@ -115,6 +115,7 @@
           <progress id="export-progress" max="1" value="0" hidden></progress>
           <footer>
             <button id="export-cancel" type="button">Cancel</button>
+            <button id="project-save" type="button">Export Project</button>
             <button id="export-submit" class="primary" type="submit">Export</button>
           </footer>
         </form>

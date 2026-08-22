@@ -10,6 +10,7 @@ import {
 import type { Object3D } from 'three';
 import { SparkRenderer } from '@sparkjsdev/spark';
 import type { Document } from '../model/Document';
+import type { ProjectViewState } from '../io/projectFormat';
 import { CameraRig } from './CameraRig';
 import type { AxisView, CameraMode } from './CameraRig';
 import { LayerGizmo } from './LayerGizmo';
@@ -173,6 +174,32 @@ export class Viewer extends EventTarget {
   }
   get transformMode(): TransformMode {
     return this.gizmo.mode;
+  }
+
+  projectViewState(): ProjectViewState {
+    return {
+      upAxis: this.upAxisValue,
+      cameraPosition: this.cameraValue.position.toArray(),
+      cameraQuaternion: this.cameraValue.quaternion.toArray(),
+      cameraUp: this.cameraValue.up.toArray(),
+      cameraTarget: this.cameraRig.controls.target.toArray(),
+      cameraMode: this.cameraRig.mode,
+      flySpeed: this.cameraRig.flySpeed,
+      fov: this.cameraValue.fov,
+    };
+  }
+
+  restoreProjectViewState(state: ProjectViewState): void {
+    this.setUpAxis(state.upAxis);
+    this.cameraValue.position.fromArray(state.cameraPosition);
+    this.cameraValue.quaternion.fromArray(state.cameraQuaternion);
+    this.cameraValue.up.fromArray(state.cameraUp);
+    this.setFov(state.fov);
+    this.cameraRig.restore(
+      state.cameraMode,
+      state.flySpeed,
+      new Vector3().fromArray(state.cameraTarget),
+    );
   }
   setBackground(color: string): void {
     this.scene.background = new Color(color);

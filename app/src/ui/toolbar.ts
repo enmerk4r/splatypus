@@ -8,6 +8,7 @@ import {
   SetLayerTransform,
 } from '../model/commands';
 import { GridArrayLayer, snapToFloorCommand } from '../model/segmentCommands';
+import type { CropBox, CropMode } from '../select/CropBox';
 import type { Segmentation } from '../select/Segmentation';
 import { ScreenSelection } from '../select/ScreenSelection';
 import type { ScreenSelectionMode } from '../select/ScreenSelection';
@@ -29,6 +30,7 @@ export interface ToolbarCallbacks {
 export function createToolbar(
   viewer: Viewer,
   segmentation: Segmentation,
+  crop: CropBox,
   host: HTMLElement,
   callbacks: ToolbarCallbacks,
 ): { dispose: () => void } {
@@ -37,11 +39,6 @@ export function createToolbar(
     `${icon(name)}<span class="sr-only">${label}</span></button>`;
 
   host.innerHTML = `
-    <div class="toolbar-group" aria-label="History">
-      ${button('data-op', 'undo', 'Undo (⌘Z)', 'undo the last edit')}
-      ${button('data-op', 'redo', 'Redo (⇧⌘Z)', 'redo the last undone edit')}
-    </div>
-    <div class="toolbar-rule"></div>
     <div class="toolbar-group" role="group" aria-label="Sketch tools">
       ${button('data-tool', 'pen', 'Sketch (S)', 'draw gaussian strokes')}
       ${button('data-tool', 'eraser', 'Erase (X)', 'erase splats of the active layer under the brush')}
@@ -60,11 +57,14 @@ export function createToolbar(
     <div class="toolbar-group">
       ${button('data-op', 'duplicate', 'Duplicate', 'copy the active layer')}
       ${button('data-op', 'array', 'Array', 'copy the active layer into a columns by rows grid')}
+      ${button('data-op', 'crop', 'Crop', 'show crop controls')}
     </div>
     <div class="toolbar-rule"></div>
     <div class="toolbar-group">
       ${button('data-op', 'isolate', 'Isolate', 'show only the active layer')}
       ${button('data-op', 'floor', 'Snap to floor', 'drop it onto the ground plane')}
+      ${button('data-op', 'undo', 'Undo (⌘Z)', 'undo the last edit')}
+      ${button('data-op', 'redo', 'Redo (⇧⌘Z)', 'redo the last undone edit')}
       ${button('data-op', 'delete', 'Delete', 'remove the selected layers (undoable)')}
     </div>
     <form class="scale-popover" aria-label="Scale factor" hidden>
@@ -85,6 +85,13 @@ export function createToolbar(
         )
         .join('')}
     </div>
+    <div class="crop-popover" role="menu" aria-label="Crop controls" hidden>
+      ${button('data-crop', 'crop', 'Show crop box', 'toggle the crop box')}
+      ${button('data-crop', 'translate', 'Move crop box', 'move the crop box')}
+      ${button('data-crop', 'scale', 'Resize crop box', 'resize the crop box')}
+      ${button('data-crop', 'cropKeep', 'Keep inside', 'hide splats outside the crop box')}
+      ${button('data-crop', 'cropCut', 'Cut inside', 'hide splats inside the crop box')}
+    </div>
   `;
 
   const op = (name: string): HTMLButtonElement =>
@@ -99,6 +106,13 @@ export function createToolbar(
   const arrayPopover = host.querySelector<HTMLFormElement>('.array-popover')!;
   const arrayInputs = [...arrayPopover.querySelectorAll<HTMLInputElement>('input')];
   const arrayApply = arrayPopover.querySelector<HTMLButtonElement>('button')!;
+  const cropButton = op('crop');
+  const cropPopover = host.querySelector<HTMLElement>('.crop-popover')!;
+  const cropToggle = cropPopover.querySelector<HTMLButtonElement>('[data-crop="crop"]')!;
+  const cropMove = cropPopover.querySelector<HTMLButtonElement>('[data-crop="translate"]')!;
+  const cropResize = cropPopover.querySelector<HTMLButtonElement>('[data-crop="scale"]')!;
+  const cropKeep = cropPopover.querySelector<HTMLButtonElement>('[data-crop="cropKeep"]')!;
+  const cropCut = cropPopover.querySelector<HTMLButtonElement>('[data-crop="cropCut"]')!;
   const selectButton = host.querySelector<HTMLButtonElement>('[data-mode="select"]')!;
   const selectionPopover = host.querySelector<HTMLElement>('.selection-popover')!;
   const selectionButtons = [
@@ -122,6 +136,15 @@ export function createToolbar(
     const hostRect = host.getBoundingClientRect();
     const buttonRect = arrayButton.getBoundingClientRect();
     arrayPopover.style.left = `${buttonRect.left - hostRect.left + buttonRect.width / 2}px`;
+  };
+
+  const setCropPopover = (visible: boolean): void => {
+    cropPopover.hidden = !visible;
+    cropButton.setAttribute('aria-expanded', String(visible));
+    if (!visible) return;
+    const hostRect = host.getBoundingClientRect();
+    const buttonRect = cropButton.getBoundingClientRect();
+    cropPopover.style.left = `${buttonRect.left - hostRect.left + buttonRect.width / 2}px`;
   };
 
   const setSelectionPopover = (visible: boolean): void => {
@@ -172,6 +195,7 @@ export function createToolbar(
     op('split').disabled = !groupSelection || groupSelection.layer.locked;
     op('duplicate').disabled = !editable;
     op('array').disabled = !editable;
+    op('crop').disabled = document.layers.length === 0;
     op('floor').disabled = !editable;
     op('delete').disabled = selected.length === 0 || selected.some((layer) => layer.locked);
     const soloed = document.solo !== undefined;
@@ -203,6 +227,18 @@ export function createToolbar(
       );
     if (scaleButton.disabled || viewer.transformMode !== 'scale') setScalePopover(false);
     if (arrayButton.disabled) setArrayPopover(false);
+    cropButton.setAttribute('aria-pressed', String(crop.isActive));
+    cropToggle.setAttribute('aria-pressed', String(crop.isActive));
+    cropToggle.setAttribute('aria-label', crop.isActive ? 'Hide crop box' : 'Show crop box');
+    cropToggle.title = crop.isActive ? 'Hide crop box' : 'Show crop box';
+    for (const [value, mode] of [
+      [cropMove, 'translate'],
+      [cropResize, 'scale'],
+    ] as [HTMLButtonElement, CropMode][]) {
+      value.disabled = !crop.isActive;
+      value.setAttribute('aria-pressed', String(crop.isActive && crop.mode === mode));
+    }
+    cropKeep.disabled = cropCut.disabled = !crop.isActive;
     if (selectButton.disabled) setSelectionPopover(false);
   };
 
@@ -242,8 +278,31 @@ export function createToolbar(
     setArrayPopover(arrayPopover.hidden);
     setScalePopover(false);
     setSelectionPopover(false);
+    setCropPopover(false);
     if (!arrayPopover.hidden) arrayInputs[0]?.focus();
   });
+  const onCropButton = (): void => {
+    setCropPopover(cropPopover.hidden);
+    setScalePopover(false);
+    setArrayPopover(false);
+    setSelectionPopover(false);
+  };
+  const onCropToggle = (): void => (crop.isActive ? crop.cancel() : crop.begin());
+  const onCropMove = (): void => crop.setMode('translate');
+  const onCropResize = (): void => crop.setMode('scale');
+  const runCrop = (keep: 'inside' | 'outside') => (): void => {
+    const hidden = crop.apply(keep);
+    if (hidden) callbacks.notify(`${hidden.toLocaleString()} splats hidden (⌘Z to undo).`);
+    else callbacks.notify('Nothing to crop.', 'warning');
+  };
+  const onCropKeep = runCrop('inside');
+  const onCropCut = runCrop('outside');
+  cropButton.addEventListener('click', onCropButton);
+  cropToggle.addEventListener('click', onCropToggle);
+  cropMove.addEventListener('click', onCropMove);
+  cropResize.addEventListener('click', onCropResize);
+  cropKeep.addEventListener('click', onCropKeep);
+  cropCut.addEventListener('click', onCropCut);
   for (const modeButton of modeButtons)
     modeButton.addEventListener('click', () => {
       const mode = modeButton.dataset.mode === 'select' ? 'translate' : modeButton.dataset.mode;
@@ -252,6 +311,7 @@ export function createToolbar(
       setScalePopover(modeButton === scaleButton ? scalePopover.hidden : false);
       setSelectionPopover(modeButton === selectButton ? selectionPopover.hidden : false);
       setArrayPopover(false);
+      setCropPopover(false);
       if (modeButton !== selectButton) {
         screenSelection.setMode('pointer');
         renderSelectionMode();
@@ -265,6 +325,7 @@ export function createToolbar(
       viewer.setTransformMode('translate');
       renderSelectionMode();
       setSelectionPopover(false);
+      setCropPopover(false);
     });
 
   const applyScaleFactor = (): void => {
@@ -354,6 +415,8 @@ export function createToolbar(
       setScalePopover(false);
     if (!arrayPopover.hidden && !arrayPopover.contains(target) && !arrayButton.contains(target))
       setArrayPopover(false);
+    if (!cropPopover.hidden && !cropPopover.contains(target) && !cropButton.contains(target))
+      setCropPopover(false);
     if (
       !selectionPopover.hidden &&
       !selectionPopover.contains(target) &&
@@ -376,6 +439,7 @@ export function createToolbar(
       setScalePopover(false);
       setArrayPopover(false);
       setSelectionPopover(false);
+      setCropPopover(false);
     });
 
   let observed = viewer.document;
@@ -396,6 +460,7 @@ export function createToolbar(
   viewer.addEventListener('tool-changed', render);
   segmentation.addEventListener('selection-changed', render);
   segmentation.addEventListener('groups-changed', render);
+  crop.addEventListener('crop-changed', render);
   observe();
 
   return {
@@ -405,6 +470,7 @@ export function createToolbar(
       viewer.removeEventListener('tool-changed', render);
       segmentation.removeEventListener('selection-changed', render);
       segmentation.removeEventListener('groups-changed', render);
+      crop.removeEventListener('crop-changed', render);
       observed?.removeEventListener('layers-changed', render);
       observed?.removeEventListener('layer-changed', render);
       observed?.removeEventListener('selection-changed', render);
@@ -414,6 +480,12 @@ export function createToolbar(
       arrayApply.removeEventListener('click', applyArray);
       for (const input of arrayInputs) input.removeEventListener('keydown', onArrayKeyDown);
       document.removeEventListener('pointerdown', onOutsideScale);
+      cropButton.removeEventListener('click', onCropButton);
+      cropToggle.removeEventListener('click', onCropToggle);
+      cropMove.removeEventListener('click', onCropMove);
+      cropResize.removeEventListener('click', onCropResize);
+      cropKeep.removeEventListener('click', onCropKeep);
+      cropCut.removeEventListener('click', onCropCut);
       screenSelection.dispose();
     },
   };

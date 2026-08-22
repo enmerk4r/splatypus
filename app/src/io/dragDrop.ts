@@ -1,4 +1,5 @@
 import { isGroupsFile } from './loadGroups';
+import { isProjectFileName } from './projectFormat';
 
 const SUPPORTED_FILE = /\.(?:ply|spz|splat|ksplat|sog)$/i;
 
@@ -8,6 +9,7 @@ export function isSupportedSplat(file: File): boolean {
 
 export interface FileInputCallbacks {
   onOpen: (file: File) => void;
+  onProject?: (file: File) => void;
   onAdd: (files: File[]) => void;
   /** A `.groups` segmentation sidecar attaches to the open scene instead of replacing it. */
   onGroups?: (file: File) => void;
@@ -28,11 +30,19 @@ export function wireFileInput(
   const route = (files: File[], deliver: (splats: File[]) => void): void => {
     const groups = files.filter(isGroupsFile);
     const splats = files.filter(isSupportedSplat);
-    if (groups.length + splats.length !== files.length)
+    const projects = files.filter((file) => isProjectFileName(file.name));
+    if (groups.length + splats.length + projects.length !== files.length)
       callbacks.onError(
-        'Unsupported file skipped. Choose PLY, SPZ, SPLAT, KSPLAT, SOG, or .groups files.',
+        'Unsupported file skipped. Choose a .splatypus project, PLY, SPZ, SPLAT, KSPLAT, SOG, or .groups file.',
         'warning',
       );
+    if (projects.length) {
+      if (projects.length > 1 || splats.length || groups.length)
+        callbacks.onError('Open one .splatypus project at a time.', 'warning');
+      if (callbacks.onProject) callbacks.onProject(projects[0]!);
+      else callbacks.onError('Editable project import is unavailable.', 'error');
+      return;
+    }
     for (const file of groups) {
       if (callbacks.onGroups) callbacks.onGroups(file);
       else callbacks.onError('Open a splat first, then drop its .groups sidecar.', 'warning');
