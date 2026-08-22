@@ -1,4 +1,4 @@
-import { SplatMesh } from '@sparkjsdev/spark';
+import { PlyReader, setPackedSplat, SplatMesh } from '@sparkjsdev/spark';
 import { normalizePlyHeaderInPlace } from './plyCompat';
 
 export type SplatSource =
@@ -54,6 +54,36 @@ function nameFromUrl(url: string): string {
   }
 }
 
+async function createPointCloudMesh(
+  fileBytes: Uint8Array,
+  fileName: string,
+): Promise<SplatMesh | undefined> {
+  if (!fileName.toLowerCase().endsWith('.ply')) return undefined;
+
+  const reader = new PlyReader({ fileBytes });
+  await reader.parseHeader();
+  const properties = reader.elements.vertex?.properties;
+  if (!properties) return undefined;
+
+  const hasPosition = Boolean(properties.x && properties.y && properties.z);
+  const hasRgb = Boolean(properties.red && properties.green && properties.blue);
+  const hasGaussianScale = ['scale_0', 'scale_1', 'scale_2'].some((name) => properties[name]);
+  if (!hasPosition || !hasRgb || hasGaussianScale) return undefined;
+
+  return new SplatMesh({
+    maxSplats: reader.numSplats,
+    constructSplats: (splats) => {
+      const packedArray = splats.ensureSplats(reader.numSplats);
+      reader.parseSplats((index, ...values) => {
+        setPackedSplat(packedArray, index, ...values);
+      });
+      splats.numSplats = reader.numSplats;
+      splats.needsUpdate = true;
+    },
+    onLoad: () => undefined,
+  });
+}
+
 export async function loadSplat(
   source: SplatSource,
   onProgress: (progress: LoadProgress) => void,
@@ -87,7 +117,9 @@ export async function loadSplat(
       await nextFrame();
       const fileBytes = new Uint8Array(bytes);
       normalizePlyHeaderInPlace(fileBytes, name);
-      mesh = new SplatMesh({ fileBytes, fileName: name, onLoad: () => undefined });
+      mesh =
+        (await createPointCloudMesh(fileBytes, name)) ??
+        new SplatMesh({ fileBytes, fileName: name, onLoad: () => undefined });
     }
     await mesh.initialized;
     return { mesh, name, byteLength };
