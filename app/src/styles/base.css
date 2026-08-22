@@ -93,15 +93,6 @@ select:focus-visible {
   }
 }
 
-.eyebrow {
-  margin-bottom: 10px;
-  color: var(--lime);
-  font-family: 'SFMono-Regular', Consolas, monospace;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-}
-
 .empty-state h1 {
   max-width: 640px;
   margin: 0;
@@ -121,14 +112,23 @@ select:focus-visible {
   color: #f1f5f2;
 }
 
-.empty-state > p {
-  margin: 24px 0;
+.empty-state .tagline {
+  margin: 16px 0 0;
+  color: var(--lime);
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.empty-state .hint {
+  margin: 22px 0 24px;
   color: #a7b1ab;
   font-size: 15px;
   line-height: 1.6;
 }
 
-.empty-state > p span {
+.empty-state .hint span {
   color: #747e78;
 }
 .empty-actions {
