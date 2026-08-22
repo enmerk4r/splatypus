@@ -1,9 +1,9 @@
 import { Pane } from 'tweakpane';
-import { icon } from './icons';
 import type { Layer } from '../model/Layer';
 import { DEFAULT_POINT_BUDGET } from '../io/pointCloud';
 import type { CameraMode } from '../viewer/CameraRig';
 import type { UpAxis, Viewer } from '../viewer/Viewer';
+import { createPanelShell } from './collapse';
 
 interface PanelSettings {
   background: string;
@@ -40,9 +40,9 @@ export function createPanel(
     pointSizeMul: 1,
     pointBudgetM: DEFAULT_POINT_BUDGET / 1e6,
   };
-  const pane = new Pane({ title: 'VIEW', expanded: false, container });
-  // Tweakpane's title is text-only; put the eye in front of it like the other panel headers.
-  container.querySelector('.tp-rotv_t')?.insertAdjacentHTML('afterbegin', icon('view'));
+  container.classList.add('layers-panel');
+  const shell = createPanelShell(container, 'VIEW', 'view', true);
+  const pane = new Pane({ container: shell.body });
   pane
     .addBinding(settings, 'background', { label: 'Background', view: 'color' })
     .on('change', (event) => viewer.setBackground(event.value));
@@ -144,6 +144,7 @@ export function createPanel(
       viewer.cameraRig.removeEventListener('mode-changed', sync);
       viewer.cameraRig.removeEventListener('speed-changed', sync);
       pane.dispose();
+      shell.dispose();
     },
   };
 }

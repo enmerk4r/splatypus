@@ -51,7 +51,10 @@ export function wireShortcuts(viewer: Viewer, actions: ShortcutActions): () => v
         viewer.frame();
         break;
       case 'KeyQ':
-        if (viewer.cameraRig.mode === 'orbit') viewer.setTool('select');
+        if (viewer.cameraRig.mode === 'orbit') {
+          viewer.setTool('select');
+          viewer.setTransformMode('translate');
+        }
         break;
       case 'KeyS':
         if (viewer.cameraRig.mode === 'orbit') viewer.setTool('sketch');

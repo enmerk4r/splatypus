@@ -1,19 +1,25 @@
-import { Matrix4, PerspectiveCamera, Scene, Vector3 } from 'three';
-import type { Object3D } from 'three';
+import { Matrix4, Object3D, PerspectiveCamera, Scene, Vector3 } from 'three';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import type { Document } from '../model/Document';
+import type { Layer } from '../model/Layer';
 import { previewAnisotropicScale } from '../model/anisotropic';
 import type { Factor3 } from '../model/anisotropic';
 import { SetLayerTransform } from '../model/commands';
-import { ScaleSplats } from '../model/segmentCommands';
+import { CompositeCommand, ScaleSplats } from '../model/segmentCommands';
 import type { CameraRig } from './CameraRig';
 
 export type TransformMode = 'translate' | 'rotate' | 'scale';
 
 export class LayerGizmo {
   private readonly controls: TransformControls;
+  /** Shared transform origin used when several layers are selected. */
+  private readonly pivot = new Object3D();
   private document?: Document;
   private before?: Matrix4;
+  private pivotBefore?: Matrix4;
+  private multiBefore?: Map<string, Matrix4>;
+  private multiLayers: Layer[] = [];
+  private multiSignature = '';
   /** Object scale when the drag started; stays on the object while a non-uniform drag previews. */
   private startScale = new Vector3(1, 1, 1);
   /** Non-uniform factor of the drag in progress (undefined for moves, rotations, uniform scales). */
@@ -28,6 +34,8 @@ export class LayerGizmo {
   ) {
     this.controls = new TransformControls(camera, canvas);
     this.controls.setSize(0.75);
+    this.pivot.name = 'Selected layers pivot';
+    scene.add(this.pivot);
     scene.add(this.controls.getHelper());
     this.controls.addEventListener('dragging-changed', this.onDraggingChanged);
     this.controls.addEventListener('mouseDown', this.onMouseDown);
@@ -71,14 +79,57 @@ export class LayerGizmo {
     this.controls.removeEventListener('objectChange', this.onObjectChange);
     this.controls.removeEventListener('mouseUp', this.onMouseUp);
     this.controls.getHelper().removeFromParent();
+    this.pivot.removeFromParent();
     this.controls.dispose();
   }
 
   private readonly syncAttachment = (): void => {
     const document = this.document;
-    const layer = document?.selection.size === 1 ? document.active() : undefined;
-    if (this.enabledValue && layer && !layer.locked) this.controls.attach(layer.object);
-    else this.controls.detach();
+    if (!this.enabledValue) {
+      this.multiLayers = [];
+      this.multiSignature = '';
+      this.controls.detach();
+      return;
+    }
+    const layers = document
+      ? [...document.selection]
+          .map((id) => document.getLayer(id))
+          .filter((layer): layer is Layer => Boolean(layer))
+      : [];
+    if (layers.length === 1 && !layers[0]!.locked) {
+      const layer = layers[0]!;
+      this.multiLayers = [];
+      this.multiSignature = '';
+      // Every newly selected editable layer starts ready to move. Rotate and scale are
+      // temporary tools; there is no separate Move button competing with Select.
+      if (this.controls.object !== layer.object) this.controls.setMode('translate');
+      this.controls.attach(layer.object);
+    } else if (layers.length > 1 && layers.every((layer) => !layer.locked)) {
+      const signature = layers.map((layer) => layer.id).join('|');
+      if (
+        this.controls.object !== this.pivot ||
+        signature !== this.multiSignature ||
+        !this.controls.dragging
+      ) {
+        const centre = new Vector3();
+        const position = new Vector3();
+        layers.forEach((layer) => centre.add(layer.object.getWorldPosition(position)));
+        centre.divideScalar(layers.length);
+        this.pivot.position.copy(centre);
+        this.pivot.quaternion.identity();
+        this.pivot.scale.setScalar(1);
+        this.pivot.updateMatrix();
+        this.pivot.updateMatrixWorld(true);
+      }
+      this.multiLayers = layers;
+      this.multiSignature = signature;
+      this.controls.setMode('translate');
+      this.controls.attach(this.pivot);
+    } else {
+      this.multiLayers = [];
+      this.multiSignature = '';
+      this.controls.detach();
+    }
   };
 
   private readonly onDraggingChanged = (event: { value?: unknown }): void => {
@@ -89,6 +140,13 @@ export class LayerGizmo {
     const object = this.controls.object as Object3D | undefined;
     if (!object) return;
     object.updateMatrix();
+    if (object === this.pivot) {
+      this.pivotBefore = object.matrix.clone();
+      this.multiBefore = new Map(
+        this.multiLayers.map((layer) => [layer.id, layer.object.matrix.clone()]),
+      );
+      return;
+    }
     this.before = object.matrix.clone();
     this.startScale.copy(object.scale);
     this.pendingFactor = undefined;
@@ -97,7 +155,27 @@ export class LayerGizmo {
   private readonly onObjectChange = (): void => {
     const layer = this.document?.active();
     const object = this.controls.object as Object3D | undefined;
-    if (!layer || !object) return;
+    if (!object) return;
+    if (object === this.pivot && this.pivotBefore && this.multiBefore) {
+      object.updateMatrix();
+      const delta = new Matrix4().multiplyMatrices(
+        object.matrix,
+        this.pivotBefore.clone().invert(),
+      );
+      for (const selected of this.multiLayers) {
+        const start = this.multiBefore.get(selected.id);
+        if (!start) continue;
+        selected.object.matrix.multiplyMatrices(delta, start);
+        selected.object.matrix.decompose(
+          selected.object.position,
+          selected.object.quaternion,
+          selected.object.scale,
+        );
+        selected.object.updateMatrixWorld(true);
+      }
+      return;
+    }
+    if (!layer) return;
     if (this.controls.getMode() === 'scale') {
       // TransformControls scales per axis (X/Y/Z handles), per plane (XY/YZ/XZ) or uniformly
       // (centre). Spark only renders a uniform object scale, so a non-uniform drag keeps the
@@ -127,7 +205,23 @@ export class LayerGizmo {
   private readonly onMouseUp = (): void => {
     const document = this.document;
     const layer = document?.active();
-    if (!document || !layer || !this.before) return;
+    if (!document) return;
+    if (this.controls.object === this.pivot && this.multiBefore) {
+      const commands = this.multiLayers.flatMap((selected) => {
+        const before = this.multiBefore?.get(selected.id);
+        selected.object.updateMatrix();
+        const after = selected.object.matrix.clone();
+        return before && !after.equals(before)
+          ? [new SetLayerTransform(document, selected.id, before, after)]
+          : [];
+      });
+      this.multiBefore = undefined;
+      this.pivotBefore = undefined;
+      if (commands.length)
+        document.history.push(new CompositeCommand(`Move ${commands.length} layers`, commands));
+      return;
+    }
+    if (!layer || !this.before) return;
     const factor = this.pendingFactor;
     this.pendingFactor = undefined;
     if (factor) {

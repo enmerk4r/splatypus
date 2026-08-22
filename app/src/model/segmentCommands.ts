@@ -224,6 +224,35 @@ export class ArrayLayer extends CompositeCommand {
   }
 }
 
+/** Duplicates a layer into a rectangular grid in layer-parent space. */
+export class GridArrayLayer extends CompositeCommand {
+  constructor(
+    document: Document,
+    source: Layer,
+    columns: number,
+    rows: number,
+    columnStep: Vector3,
+    rowStep: Vector3,
+  ) {
+    const width = Math.max(1, Math.round(columns));
+    const height = Math.max(1, Math.round(rows));
+    const copies: DuplicateLayer[] = [];
+    for (let row = 0; row < height; row += 1) {
+      for (let column = 0; column < width; column += 1) {
+        if (row === 0 && column === 0) continue;
+        const copy = new DuplicateLayer(document, source);
+        copy.duplicate.name = `${source.name} ${column + 1}×${row + 1}`;
+        copy.duplicate.object.position
+          .add(columnStep.clone().multiplyScalar(column))
+          .add(rowStep.clone().multiplyScalar(row));
+        copy.duplicate.object.updateMatrix();
+        copies.push(copy);
+      }
+    }
+    super(`Array ${width} × ${height}`, copies);
+  }
+}
+
 /**
  * A transform command that drops the layer until its lowest robust-bounds corner sits on
  * the world plane `floorY` (the grid). Returns undefined when it is already there.

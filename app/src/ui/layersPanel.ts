@@ -1,7 +1,5 @@
-import { Vector3 } from 'three';
 import type { Document } from '../model/Document';
 import type { Layer, LayerKind } from '../model/Layer';
-import { ArrayLayer, snapToFloorCommand } from '../model/segmentCommands';
 import {
   DuplicateLayer,
   LockedLayerError,
@@ -15,6 +13,7 @@ import {
 import type { Viewer } from '../viewer/Viewer';
 import { createPanelShell } from './collapse';
 import type { ToastLevel } from './hud';
+import { icon } from './icons';
 
 export interface LayersPanelCallbacks {
   onAdd: () => void;
@@ -118,34 +117,30 @@ export function createLayersPanel(
     const row = document.createElement('div');
     row.className = `layer-row${observed?.selection.has(layer.id) ? ' selected' : ''}${layer.locked ? ' locked' : ''}`;
     row.dataset.layerId = layer.id;
-    const eye = button(
-      layer.visible ? '●' : '○',
-      layer.visible ? 'Hide layer' : 'Show layer',
-      () => {
-        if (observed)
-          execute(() =>
-            observed!.history.push(
-              new SetLayerVisible(observed!, layer.id, layer.visible, !layer.visible),
-            ),
-          );
-      },
-    );
+    const eye = button('', layer.visible ? 'Hide layer' : 'Show layer', () => {
+      if (observed)
+        execute(() =>
+          observed!.history.push(
+            new SetLayerVisible(observed!, layer.id, layer.visible, !layer.visible),
+          ),
+        );
+    });
+    eye.innerHTML = icon(layer.visible ? 'visible' : 'hidden');
     eye.className = 'layer-icon';
     eye.setAttribute('aria-label', eye.title);
-    const lock = button(
-      layer.locked ? '◆' : '◇',
-      layer.locked ? 'Unlock layer' : 'Lock layer',
-      () => {
-        if (observed)
-          execute(() =>
-            observed!.history.push(
-              new SetLayerLocked(observed!, layer.id, layer.locked, !layer.locked),
-            ),
-          );
-      },
-    );
+    eye.setAttribute('aria-pressed', String(layer.visible));
+    const lock = button('', layer.locked ? 'Unlock layer' : 'Lock layer', () => {
+      if (observed)
+        execute(() =>
+          observed!.history.push(
+            new SetLayerLocked(observed!, layer.id, layer.locked, !layer.locked),
+          ),
+        );
+    });
+    lock.innerHTML = icon(layer.locked ? 'lock' : 'unlock');
     lock.className = 'layer-icon';
     lock.setAttribute('aria-label', lock.title);
+    lock.setAttribute('aria-pressed', String(layer.locked));
     const tag = document.createElement('i');
     tag.className = 'layer-tag';
     tag.style.background = KIND_COLORS[layer.kind];
@@ -165,6 +160,10 @@ export function createLayersPanel(
       if ((event.target as HTMLElement).closest('button,input')) return;
       selectRow(event, layer.id, displayed);
     });
+    row.addEventListener('contextmenu', (event) => {
+      event.preventDefault();
+      startRename(name, layer);
+    });
     return row;
   };
 
@@ -183,8 +182,19 @@ export function createLayersPanel(
     const active = model.active();
     const toolbar = document.createElement('div');
     toolbar.className = 'layers-toolbar';
-    const add = button('+', 'Add files as layers', callbacks.onAdd);
-    const duplicate = button('DUP', 'Duplicate selected layer', () => {
+    const toolButton = (
+      iconName: string,
+      label: string,
+      title: string,
+      action: () => void,
+    ): HTMLButtonElement => {
+      const value = button('', title, action);
+      value.innerHTML = icon(iconName);
+      value.setAttribute('aria-label', label);
+      return value;
+    };
+    const add = toolButton('add', 'Add layer', 'Add files as layers', callbacks.onAdd);
+    const duplicate = toolButton('duplicate', 'Duplicate', 'Duplicate selected layer', () => {
       if (!active) return;
       execute(() => {
         const command = new DuplicateLayer(model, active);
@@ -192,7 +202,7 @@ export function createLayersPanel(
         model.setSelection([command.duplicate.id]);
       });
     });
-    const merge = button('MRG', 'Merge selected layers', () => {
+    const merge = toolButton('merge', 'Merge', 'Merge selected layers', () => {
       if (selected.length < 2) return;
       execute(() => {
         const command = new MergeLayers(
@@ -204,7 +214,7 @@ export function createLayersPanel(
         model.setSelection([command.merged.id]);
       });
     });
-    const remove = button('DEL', 'Delete selected layers', () => {
+    const remove = toolButton('delete', 'Delete', 'Delete selected layers', () => {
       if (selected.length)
         execute(() =>
           model.history.push(
@@ -221,48 +231,46 @@ export function createLayersPanel(
       const to = Math.max(0, Math.min(model.layers.length - 1, from + delta));
       if (to !== from) execute(() => model.history.push(new MoveLayer(model, active.id, from, to)));
     };
-    const up = button('↑', 'Move layer up', () => move(1));
-    const down = button('↓', 'Move layer down', () => move(-1));
-    const solo = button('SOLO', 'Show only this layer (view state, not undoable)', () => {
-      if (!active) return;
-      model.setSolo(model.solo === active.id ? undefined : active.id);
-    });
-    const floor = button('FLOOR', 'Drop the layer onto the ground plane (y = 0)', () => {
-      if (!active) return;
-      execute(() => {
-        const command = snapToFloorCommand(model, active);
-        if (command) model.history.push(command);
-      });
-    });
-    const array = button('×5', 'Four more copies in a row', () => {
-      if (!active) return;
-      execute(() => {
-        const bounds = active.store.computeRobustBounds();
-        const step = new Vector3(
-          (bounds.max[0] - bounds.min[0]) * 1.2 * active.object.scale.x,
-          0,
-          0,
+    const up = toolButton('up', 'Move up', 'Move layer up', () => move(1));
+    const down = toolButton('down', 'Move down', 'Move layer down', () => move(-1));
+    const visibility = toolButton(
+      active?.visible ? 'visible' : 'hidden',
+      active?.visible ? 'Hide' : 'Show',
+      active?.visible ? 'Hide selected layer' : 'Show selected layer',
+      () => {
+        if (!active) return;
+        execute(() =>
+          model.history.push(
+            new SetLayerVisible(model, active.id, active.visible, !active.visible),
+          ),
         );
-        model.history.push(new ArrayLayer(model, active, 4, step));
-      });
-    });
-    solo.setAttribute(
-      'aria-pressed',
-      String(model.solo !== undefined && model.solo === active?.id),
+      },
     );
-    solo.disabled = !active && model.solo === undefined;
-    floor.disabled = !active || active.locked;
-    array.disabled = !active || active.locked;
+    const lock = toolButton(
+      active?.locked ? 'lock' : 'unlock',
+      active?.locked ? 'Unlock' : 'Lock',
+      active?.locked ? 'Unlock selected layer' : 'Lock selected layer',
+      () => {
+        if (!active) return;
+        execute(() =>
+          model.history.push(new SetLayerLocked(model, active.id, active.locked, !active.locked)),
+        );
+      },
+    );
+    visibility.setAttribute('aria-pressed', String(active?.visible === true));
+    lock.setAttribute('aria-pressed', String(active?.locked === true));
+    visibility.disabled = !active;
+    lock.disabled = !active;
     duplicate.disabled = !active || active.locked;
     merge.disabled = selected.length < 2 || selected.some((layer) => layer.locked);
     remove.disabled = selected.length === 0 || selected.some((layer) => layer.locked);
     up.disabled = !active || active.locked || model.layers.at(-1)?.id === active.id;
     down.disabled = !active || active.locked || model.layers[0]?.id === active.id;
-    toolbar.append(add, duplicate, merge, remove, up, down, solo, floor, array);
+    toolbar.append(add, duplicate, merge, up, down, visibility, lock, remove);
     const footer = document.createElement('div');
     footer.className = 'layers-footer';
     footer.textContent = `${model.layers.length} layers · ${compactCount(model.totalLive())} splats · ${compactCount(model.hiddenCount())} hidden`;
-    body.append(list, toolbar, footer);
+    body.append(toolbar, list, footer);
   };
 
   const observe = (): void => {

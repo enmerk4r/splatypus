@@ -5,6 +5,7 @@ import { Layer } from '../src/model/Layer';
 import { SplatStore } from '../src/model/SplatStore';
 import {
   ArrayLayer,
+  GridArrayLayer,
   SetSplatsAlive,
   SplitSplats,
   snapToFloorCommand,
@@ -168,6 +169,24 @@ describe('segment commands', () => {
       .map((candidate) => candidate.object.position.x)
       .sort((a, b) => a - b);
     expect(xs).toEqual([0, 2, 4, 6]);
+    document.history.undo();
+    expect(document.layers).toHaveLength(1);
+
+    document.history.push(
+      new GridArrayLayer(document, layer, 3, 2, new Vector3(2, 0, 0), new Vector3(0, 0, 3)),
+    );
+    expect(document.layers).toHaveLength(6);
+    const positions = document.layers
+      .map((candidate) => [candidate.object.position.x, candidate.object.position.z])
+      .sort((a, b) => a[1]! - b[1]! || a[0]! - b[0]!);
+    expect(positions).toEqual([
+      [0, 0],
+      [2, 0],
+      [4, 0],
+      [0, 3],
+      [2, 3],
+      [4, 3],
+    ]);
     document.history.undo();
     expect(document.layers).toHaveLength(1);
   });

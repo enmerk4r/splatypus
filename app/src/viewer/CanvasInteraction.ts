@@ -6,6 +6,7 @@ import type { LayerHit } from './picking';
 /** Canvas selection/hover routing plus the sketch-mode OrbitControls button override. */
 export class CanvasInteraction {
   private pointerDown?: Vector3;
+  private pointerDownShift = false;
   private hoverPending?: PointerEvent;
   private hoverLeft = false;
   private lastHover?: PointerEvent;
@@ -78,6 +79,7 @@ export class CanvasInteraction {
 
   private readonly onPointerDown = (event: PointerEvent): void => {
     this.pointerDown = new Vector3(event.clientX, event.clientY, event.button);
+    this.pointerDownShift = event.shiftKey;
   };
 
   /** Capture phase runs before OrbitControls sees the pointer-down. */
@@ -101,7 +103,9 @@ export class CanvasInteraction {
 
   private readonly onPointerUp = (event: PointerEvent): void => {
     const start = this.pointerDown;
+    const additive = event.shiftKey || this.pointerDownShift;
     this.pointerDown = undefined;
+    this.pointerDownShift = false;
     const document = this.viewer.document;
     if (
       !start ||
@@ -109,7 +113,6 @@ export class CanvasInteraction {
       event.button !== 0 ||
       event.ctrlKey ||
       event.metaKey ||
-      event.shiftKey ||
       this.viewer.cameraRig.mode !== 'orbit' ||
       this.blocked()
     )
@@ -120,7 +123,14 @@ export class CanvasInteraction {
     const hit =
       pickLayer(document, this.viewer.camera, pointer) ??
       nearestProjectedPoint(document, this.viewer.camera, pointer, rect);
-    document.setSelection(hit ? [hit.layer.id] : []);
-    this.viewer.dispatchEvent(new CustomEvent('canvas-click', { detail: { event, hit } }));
+    if (additive && hit) {
+      const next = new Set(document.selection);
+      if (next.has(hit.layer.id)) next.delete(hit.layer.id);
+      else next.add(hit.layer.id);
+      document.setSelection([...next]);
+    } else document.setSelection(hit ? [hit.layer.id] : []);
+    this.viewer.dispatchEvent(
+      new CustomEvent('canvas-click', { detail: { event, hit, additive } }),
+    );
   };
 }

@@ -36,7 +36,7 @@ export function createSegmentPanel(
       </div>
       <div class="segment-actions">
         <button type="button" id="segment-rebake">Segment</button>
-        <button type="button" id="segment-overlay" aria-pressed="false">Show labels</button>
+        <button type="button" id="segment-overlay" aria-pressed="false">Show segmentation</button>
       </div>
       <div class="segment-row">
         <label for="segment-blend">Blend</label>
@@ -93,7 +93,7 @@ export function createSegmentPanel(
       : 'Select a layer to segment';
     const anySegmented = segmentation.segmentedLayers.length > 0;
     overlay.disabled = !anySegmented;
-    overlay.textContent = segmentation.overlay ? 'Hide labels' : 'Show labels';
+    overlay.textContent = segmentation.overlay ? 'Hide segmentation' : 'Show segmentation';
     overlay.setAttribute('aria-pressed', String(segmentation.overlay));
     blend.disabled = !segmentation.overlay;
     blend.value = String(Math.round(segmentation.blend * 100));
@@ -107,7 +107,7 @@ export function createSegmentPanel(
           ? 'Nothing under the cursor — click closer to a surface.'
           : segmentation.outcome === 'unassigned'
             ? 'That splat is in no group; lower Detail to cover more.'
-            : 'Click a group in the scene to select it.';
+            : 'Click a group to select it; Shift-click to select more.';
       status.textContent = `${summarise(groups)}. ${hint}`;
     } else if (target) {
       status.textContent = `“${target.name}” is not segmented. Press Segment, or drop a .groups sidecar.`;

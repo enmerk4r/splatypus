@@ -13,7 +13,10 @@ import { buildPalette, UNASSIGNED_COLOUR } from './groupPalette';
 
 export interface GroupSelection {
   layer: Layer;
+  /** Last group clicked, retained as the primary group for hover comparisons. */
   groupId: number;
+  /** All groups in the selection. Shift-click adds or removes ids in this list. */
+  groupIds: readonly number[];
   info: GroupInfo;
   /** Store indices of the group (may include splats hidden since the bake). */
   indices: Uint32Array;
@@ -51,6 +54,8 @@ export class Segmentation extends EventTarget {
   private overlayEnabled = false;
   private blendValue = 0.85;
   private readonly subscribed = new Set<Layer>();
+  /** Selected split layers use the same green language as selected unsplit groups. */
+  private highlightedLayers = new Set<Layer>();
 
   constructor(private readonly viewer: Viewer) {
     super();
@@ -87,16 +92,81 @@ export class Segmentation extends EventTarget {
     return document.active() ?? (document.layers.length === 1 ? document.layers[0] : undefined);
   }
 
-  select(layer: Layer | undefined, groupId?: number): void {
+  select(layer: Layer | undefined, groupId?: number, additive = false): void {
     this.clearHover();
     if (this.selectionValue) this.restore(this.selectionValue.layer, this.selectionValue.indices);
     if (!layer?.groups || groupId === undefined || groupId === UNASSIGNED) {
       this.selectionValue = undefined;
     } else {
-      const indices = layer.groups.indicesOf(groupId);
-      this.selectionValue = { layer, groupId, info: layer.groups.info(groupId), indices };
+      const previous = this.selectionValue;
+      const groupIds =
+        additive && previous?.layer === layer ? [...previous.groupIds] : ([] as number[]);
+      const existing = groupIds.indexOf(groupId);
+      if (existing >= 0) groupIds.splice(existing, 1);
+      else groupIds.push(groupId);
+      this.selectionValue = groupIds.length
+        ? this.makeSelection(layer, groupIds, groupId)
+        : undefined;
+      if (this.selectionValue) {
+        this.outcomeValue = 'selected';
+        // A group inside a layer is only a candidate until it is split out. Clear the
+        // editable-layer selection so the containing layer's gumball does not imply that
+        // the unsplit group itself can already be transformed.
+        this.document?.setSelection([]);
+        this.tint(layer, this.selectionValue.indices, HIGHLIGHT, HIGHLIGHT_STRENGTH);
+      }
+    }
+    this.dispatchEvent(new Event('selection-changed'));
+  }
+
+  /** Selects every group containing a projected splat accepted by the screen predicate. */
+  selectProjected(
+    accepts: (clientX: number, clientY: number) => boolean,
+    additive = false,
+  ): number {
+    const layer =
+      this.selectionValue?.layer ??
+      this.targetLayer() ??
+      (this.segmentedLayers.length === 1 ? this.segmentedLayers[0] : undefined);
+    const groups = layer?.groups;
+    if (!layer || !groups) return 0;
+    const camera = this.viewer.camera;
+    const rect = this.viewer.canvasElement.getBoundingClientRect();
+    const world = new Vector3();
+    const projected = new Vector3();
+    const selected = new Set<number>();
+    layer.object.updateMatrixWorld(true);
+    camera.updateMatrixWorld(true);
+    for (let index = 0; index < layer.store.count; index += 1) {
+      if (!layer.store.alive[index]) continue;
+      const groupId = groups.groupOf(index);
+      if (groupId === UNASSIGNED || selected.has(groupId)) continue;
+      world.fromArray(layer.store.centers, index * 3).applyMatrix4(layer.object.matrixWorld);
+      projected.copy(world).project(camera);
+      if (projected.z < -1 || projected.z > 1) continue;
+      const clientX = rect.left + ((projected.x + 1) * rect.width) / 2;
+      const clientY = rect.top + ((1 - projected.y) * rect.height) / 2;
+      if (accepts(clientX, clientY)) selected.add(groupId);
+    }
+    this.selectGroups(layer, [...selected], additive);
+    return selected.size;
+  }
+
+  private selectGroups(layer: Layer, groupIds: readonly number[], additive: boolean): void {
+    this.clearHover();
+    if (this.selectionValue) this.restore(this.selectionValue.layer, this.selectionValue.indices);
+    const combined =
+      additive && this.selectionValue?.layer === layer
+        ? [...this.selectionValue.groupIds]
+        : ([] as number[]);
+    for (const groupId of groupIds) if (!combined.includes(groupId)) combined.push(groupId);
+    this.selectionValue = combined.length
+      ? this.makeSelection(layer, combined, combined.at(-1)!)
+      : undefined;
+    if (this.selectionValue) {
       this.outcomeValue = 'selected';
-      this.tint(layer, indices, HIGHLIGHT, HIGHLIGHT_STRENGTH);
+      this.document?.setSelection([]);
+      this.tint(layer, this.selectionValue.indices, HIGHLIGHT, HIGHLIGHT_STRENGTH);
     }
     this.dispatchEvent(new Event('selection-changed'));
   }
@@ -204,7 +274,10 @@ export class Segmentation extends EventTarget {
   }
 
   private readonly onClick = (event: Event): void => {
-    const { hit } = (event as CustomEvent<{ event: PointerEvent; hit?: LayerHit }>).detail;
+    const detail = (
+      event as CustomEvent<{ event: PointerEvent; hit?: LayerHit; additive?: boolean }>
+    ).detail;
+    const { hit } = detail;
     if (this.segmentedLayers.length === 0) return;
     const picked = hit ? this.pickGroup(hit) : 'missed';
     if (picked === 'no-groups') {
@@ -218,7 +291,7 @@ export class Segmentation extends EventTarget {
       this.outcomeValue = 'unassigned';
       this.select(undefined);
     } else {
-      this.select(picked.layer, picked.groupId);
+      this.select(picked.layer, picked.groupId, detail.additive ?? detail.event.shiftKey);
     }
   };
 
@@ -229,11 +302,13 @@ export class Segmentation extends EventTarget {
     let next: GroupSelection | undefined;
     if (typeof picked !== 'string' && picked.groupId !== UNASSIGNED) {
       const { layer, groupId } = picked;
-      const held = this.selectionValue?.layer === layer && this.selectionValue.groupId === groupId;
+      const held =
+        this.selectionValue?.layer === layer && this.selectionValue.groupIds.includes(groupId);
       if (!held && layer.groups)
         next = {
           layer,
           groupId,
+          groupIds: [groupId],
           info: layer.groups.info(groupId),
           indices: layer.groups.indicesOf(groupId),
         };
@@ -257,6 +332,27 @@ export class Segmentation extends EventTarget {
     this.dispatchEvent(new CustomEvent('hover-changed', { detail: {} }));
   }
 
+  private makeSelection(
+    layer: Layer,
+    groupIds: readonly number[],
+    primary: number,
+  ): GroupSelection {
+    const groups = layer.groups!;
+    const parts = groupIds.map((id) => groups.indicesOf(id));
+    const count = parts.reduce((total, indices) => total + indices.length, 0);
+    const indices = new Uint32Array(count);
+    let offset = 0;
+    for (const part of parts) {
+      indices.set(part, offset);
+      offset += part.length;
+    }
+    const info =
+      groupIds.length === 1
+        ? groups.info(groupIds[0]!)
+        : { id: primary, name: `${groupIds.length} groups`, count };
+    return { layer, groupId: primary, groupIds: [...groupIds], info, indices };
+  }
+
   // ---- painting ---------------------------------------------------------------------
 
   /** Display colour before any tint: the store colour, or the group label when the overlay is on. */
@@ -274,7 +370,12 @@ export class Segmentation extends EventTarget {
     };
   }
 
-  private tint(layer: Layer, indices: Uint32Array, colour: Color, strength: number): void {
+  private tint(
+    layer: Layer,
+    indices: Iterable<number> | undefined,
+    colour: Color,
+    strength: number,
+  ): void {
     const base = this.painter(layer);
     paintSplats(
       layer,
@@ -297,6 +398,8 @@ export class Segmentation extends EventTarget {
       this.tint(layer, this.selectionValue.indices, HIGHLIGHT, HIGHLIGHT_STRENGTH);
     if (this.hoverValue?.layer === layer)
       this.tint(layer, this.hoverValue.indices, HOVER, HOVER_STRENGTH);
+    if (this.highlightedLayers.has(layer))
+      this.tint(layer, undefined, HIGHLIGHT, HIGHLIGHT_STRENGTH);
   }
 
   // ---- document wiring ---------------------------------------------------------------
@@ -304,13 +407,17 @@ export class Segmentation extends EventTarget {
   private readonly onDocumentChanged = (): void => {
     this.unsubscribe();
     this.document?.removeEventListener('layers-changed', this.onLayersChanged);
+    this.document?.removeEventListener('selection-changed', this.syncLayerHighlights);
     this.document = this.viewer.document;
     this.selectionValue = undefined;
     this.hoverValue = undefined;
+    this.highlightedLayers.clear();
     this.outcomeValue = 'none';
     this.overlayEnabled = false;
     this.document?.addEventListener('layers-changed', this.onLayersChanged);
+    this.document?.addEventListener('selection-changed', this.syncLayerHighlights);
     this.onLayersChanged();
+    this.syncLayerHighlights();
     this.dispatchEvent(new Event('groups-changed'));
     this.dispatchEvent(new Event('selection-changed'));
     this.dispatchEvent(new Event('overlay-changed'));
@@ -334,11 +441,26 @@ export class Segmentation extends EventTarget {
       this.dispatchEvent(new Event('selection-changed'));
     }
     if (this.hoverValue && !layers.has(this.hoverValue.layer)) this.hoverValue = undefined;
+    this.syncLayerHighlights();
   };
 
   private readonly onLayerSynced = (event: Event): void => {
     const layer = event.target as Layer;
-    if (layer.groups) this.repaint(layer);
+    if (layer.groups || this.highlightedLayers.has(layer)) this.repaint(layer);
+  };
+
+  private readonly syncLayerHighlights = (): void => {
+    const document = this.document;
+    const next = new Set(
+      document?.layers.filter(
+        (layer) => layer.kind === 'segment' && document.selection.has(layer.id),
+      ) ?? [],
+    );
+    const changed = new Set([...this.highlightedLayers, ...next]);
+    this.highlightedLayers = next;
+    changed.forEach((layer) => {
+      if (this.document?.getLayer(layer.id)) this.repaint(layer);
+    });
   };
 
   private unsubscribe(): void {

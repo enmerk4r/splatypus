@@ -11,7 +11,12 @@ export interface PanelShell {
  * Gives a right-rail panel a header (icon, title, chevron) that collapses its body.
  * The collapsed state is remembered per title in localStorage.
  */
-export function createPanelShell(root: HTMLElement, title: string, iconName: string): PanelShell {
+export function createPanelShell(
+  root: HTMLElement,
+  title: string,
+  iconName: string,
+  defaultCollapsed = false,
+): PanelShell {
   const key = `splatypus.panel.${title.toLowerCase()}.collapsed`;
   root.replaceChildren();
   const head = document.createElement('button');
@@ -32,11 +37,12 @@ export function createPanelShell(root: HTMLElement, title: string, iconName: str
       // Storage can be unavailable (private mode); the state then lives for the session only.
     }
   };
-  let initial = false;
+  let initial = defaultCollapsed;
   try {
-    initial = localStorage.getItem(key) === '1';
+    const saved = localStorage.getItem(key);
+    initial = saved === null ? defaultCollapsed : saved === '1';
   } catch {
-    initial = false;
+    initial = defaultCollapsed;
   }
   setCollapsed(initial);
   const onClick = (): void => setCollapsed(!root.classList.contains('collapsed'));
