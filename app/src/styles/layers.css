@@ -219,6 +219,61 @@
   border-top: 1px solid var(--line);
 }
 
+.toolbar {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  z-index: 5;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  max-width: calc(100vw - 36px);
+  overflow-x: auto;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  box-shadow: 0 12px 38px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(18px);
+  transform: translateX(-50%);
+}
+
+.toolbar-group {
+  display: flex;
+  gap: 5px;
+}
+
+.toolbar button {
+  display: grid;
+  width: 30px;
+  height: 28px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: #dbe3dd;
+  background: rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+}
+
+.toolbar button:hover:not(:disabled),
+.toolbar button[aria-pressed='true'] {
+  border-color: var(--lime);
+  color: var(--lime);
+}
+
+.toolbar button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.toolbar-rule {
+  flex: none;
+  width: 1px;
+  height: 18px;
+  background: var(--line);
+}
+
 .hover-label {
   position: fixed;
   top: 0;

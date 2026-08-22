@@ -78,8 +78,10 @@ splat count.
 Hover a group to see its name; click to select it (the picker prefers the nearest *assigned*
 splat); **Split to layer** lifts it into its own `segment` layer, re-originned on its centroid
 so the gizmo sits on the object and rotation spins it in place. Splits, crops and all layer
-tools are undoable. The **LAYERS** toolbar adds **SOLO** (show only this layer — view state),
-**FLOOR** (drop onto the grid plane) and **×5** (four more copies in a row). **CROP** shows a box
+tools are undoable. The bottom **object toolbar** (icons, hover for labels) holds the per-object
+tools: split, move/rotate/scale, duplicate, array ×5, merge, isolate, snap to floor, delete; the
+**LAYERS** toolbar mirrors **SOLO** (show only this layer — view state), **FLOOR** (drop onto the
+grid plane) and **×5** (four more copies in a row). **CROP** shows a box
 gizmo (move/resize); **Keep inside** / **Cut inside** hide everything on the wrong side in every
 visible unlocked layer (`Ctrl+Z` restores). Hidden splats are never exported.
 

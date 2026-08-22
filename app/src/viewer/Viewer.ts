@@ -139,6 +139,10 @@ export class Viewer extends EventTarget {
   }
   setTransformMode(mode: TransformMode): void {
     this.gizmo.setMode(mode);
+    this.dispatchEvent(new Event('transform-mode-changed'));
+  }
+  get transformMode(): TransformMode {
+    return this.gizmo.mode;
   }
   setBackground(color: string): void {
     this.scene.background = new Color(color);

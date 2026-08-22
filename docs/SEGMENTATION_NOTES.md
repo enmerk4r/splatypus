@@ -41,13 +41,13 @@ Phase 2 model, and the pure modules were taken verbatim.
 | `GroupOverlay` (whole-scene label paint, blend) | `Segmentation.setOverlay/setBlend`, re-applied on each layer's `synced` event |
 | `CropBox` hiding via opacity snapshots | `select/CropBox.ts`: same unit-cube gizmo; applying pushes one `CompositeCommand` of `SetSplatsAlive` across visible unlocked layers (Ctrl+Z undoes) |
 | her `exportPly` (forEachSplat, lossy, drops hidden) | Phase 2 writer already drops dead splats and bakes transforms, full precision |
-| `library` / `inspector` / bottom `toolbar` shell | SEGMENT panel in the right rail (segment by, detail, labels, blend, status, split/clear, crop), plus `SOLO`/`FLOOR`/`×5` in the LAYERS toolbar, hover label next to the cursor |
+| `library` / `inspector` / bottom `toolbar` shell | bottom object toolbar (`ui/toolbar.ts`, her icons verbatim: split, move/rotate/scale, duplicate, array, merge, isolate, floor, delete), SEGMENT panel in the right rail (segment by, detail, labels, blend, status, split/clear, crop), `SOLO`/`FLOOR`/`×5` in the LAYERS toolbar, hover label next to the cursor |
 | `.groups` sidecar on `?url=`, `?groups=`, drop | same; a dropped `.groups` attaches to the active (or only) layer and must match its store count |
 | `probe.html` / `make-index-probe.mjs` (does Spark preserve file order?) | not needed: our decoder defines the order, so index alignment holds by construction |
 
 **Not ported:** nested groupings (`Group`/`Ungroup` — our layer list is flat; `MergeLayers`
 covers "move together" by baking), the inspector's numeric position fields, the
-collapsible panel shell. `.groups` export from an in-app bake is a small follow-up
+collapsible library/inspector panel shell. `.groups` export from an in-app bake is a small follow-up
 (`encodeGroups` is already there).
 
 ## Behaviour notes

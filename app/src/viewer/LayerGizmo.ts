@@ -41,6 +41,10 @@ export class LayerGizmo {
     this.controls.setMode(mode);
   }
 
+  get mode(): TransformMode {
+    return this.controls.getMode() as TransformMode;
+  }
+
   /** True while the pointer is over a gizmo handle or a drag is in progress. */
   get isInteracting(): boolean {
     return this.controls.dragging || this.controls.axis !== null;

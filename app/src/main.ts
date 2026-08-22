@@ -15,6 +15,7 @@ import { Hud } from './ui/hud';
 import { createLayersPanel } from './ui/layersPanel';
 import { createPanel } from './ui/panel';
 import { createSegmentPanel } from './ui/segmentPanel';
+import { createToolbar } from './ui/toolbar';
 import { wireShortcuts } from './ui/shortcuts';
 import { Viewer, WebGLUnavailableError } from './viewer/Viewer';
 
@@ -131,6 +132,9 @@ async function bootstrap(): Promise<void> {
     onError: (message) => hud.toast(message),
   });
   const hoverLabel = createHoverLabel(element('hover-label'), segmentation);
+  const toolbar = createToolbar(viewer, segmentation, element('toolbar'), {
+    onError: (message) => hud.toast(message),
+  });
   const exportDialog = createExportDialog(
     element<HTMLDialogElement>('export-dialog'),
     element<HTMLButtonElement>('export-file'),
@@ -215,6 +219,7 @@ async function bootstrap(): Promise<void> {
       layersPanel.dispose();
       segmentPanel.dispose();
       hoverLabel.dispose();
+      toolbar.dispose();
       exportDialog.dispose();
       segmentation.dispose();
       crop.dispose();
