@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#111111" />
+    <meta
+      name="description"
+      content="Splatypus is a private, browser-based Gaussian splat viewer."
+    />
+    <title>Splatypus — Gaussian splat viewer</title>
+  </head>
+  <body>
+    <main id="app">
+      <canvas id="viewer" aria-label="3D Gaussian splat viewer"></canvas>
+
+      <section id="empty-state" class="empty-state" aria-labelledby="empty-title">
+        <span class="eyebrow">LOCAL-FIRST 3D VIEWER</span>
+        <h1 id="empty-title">Drop a splat.<br />Explore the scene.</h1>
+        <p>
+          Drop a .ply / .spz / .splat here — or pick a sample.<br />
+          <span>Files stay on this device.</span>
+        </p>
+        <div class="empty-actions">
+          <button id="open-file" class="primary" type="button">Open a file</button>
+          <label class="sample-picker">
+            <span class="sr-only">Pick a sample</span>
+            <select id="sample-select" aria-label="Pick a sample">
+              <option value="">Pick a sample…</option>
+            </select>
+          </label>
+        </div>
+        <p class="formats">PLY · COMPRESSED.PLY · SPZ · SPLAT · KSPLAT · SOG</p>
+      </section>
+
+      <input id="file-input" class="sr-only" type="file" accept=".ply,.spz,.splat,.ksplat,.sog" />
+
+      <aside id="hud" class="hud" aria-live="polite">
+        <div class="brand"><span class="brand-mark">S</span><span>SPLATYPUS</span></div>
+        <dl>
+          <div>
+            <dt>FPS</dt>
+            <dd id="hud-fps">—</dd>
+          </div>
+          <div>
+            <dt>SPLATS</dt>
+            <dd id="hud-count">—</dd>
+          </div>
+          <div>
+            <dt>FILE</dt>
+            <dd id="hud-file">No scene</dd>
+          </div>
+          <div>
+            <dt>STATUS</dt>
+            <dd id="hud-status">Ready</dd>
+          </div>
+        </dl>
+        <div id="progress-track" class="progress-track" hidden>
+          <div id="progress-bar" class="progress-bar"></div>
+        </div>
+      </aside>
+
+      <div id="panel" class="panel-host"></div>
+      <div id="drag-overlay" class="drag-overlay" hidden>
+        <div><strong>Drop to open</strong><span>The current scene will be replaced</span></div>
+      </div>
+      <div id="toast-region" class="toast-region" aria-live="assertive"></div>
+      <div id="fly-hint" class="fly-hint" hidden>FLY · WASD + QE · DRAG TO LOOK · ESC TO EXIT</div>
+      <div id="webgl-error" class="fatal-error" hidden>
+        <h1>WebGL 2 is required</h1>
+        <p>
+          Try a current version of Chrome, Firefox, or Safari with hardware acceleration enabled.
+        </p>
+      </div>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

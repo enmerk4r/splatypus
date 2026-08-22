@@ -1,0 +1,105 @@
+.hud {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  z-index: 4;
+  width: min(300px, calc(100vw - 36px));
+  padding: 13px 14px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel);
+  box-shadow: 0 12px 38px rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(18px);
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-size: 10px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 13px;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+}
+
+.brand-mark {
+  display: grid;
+  width: 21px;
+  height: 21px;
+  place-items: center;
+  border-radius: 50%;
+  color: #111;
+  background: var(--lime);
+  font-size: 11px;
+  letter-spacing: 0;
+}
+
+.hud dl {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+}
+.hud dl div {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr);
+  gap: 8px;
+}
+.hud dt {
+  color: #77817b;
+}
+
+.hud dd {
+  margin: 0;
+  overflow: hidden;
+  color: #dbe3dd;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.progress-track {
+  height: 2px;
+  margin-top: 12px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.progress-bar {
+  width: 0;
+  height: 100%;
+  background: var(--lime);
+  transition: width 100ms linear;
+}
+
+.progress-track.indeterminate .progress-bar {
+  width: 38%;
+  animation: progress 1s ease-in-out infinite;
+}
+
+@keyframes progress {
+  from {
+    transform: translateX(-110%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+
+.panel-host {
+  --tp-base-background-color: hsla(150, 8%, 8%, 0.82);
+  --tp-base-shadow-color: hsla(0, 0%, 0%, 0.35);
+  --tp-button-background-color: hsla(0, 0%, 100%, 0.1);
+  --tp-button-foreground-color: hsla(120, 12%, 92%, 1);
+  --tp-container-background-color: hsla(0, 0%, 100%, 0.04);
+  --tp-input-background-color: hsla(0, 0%, 100%, 0.08);
+  --tp-input-foreground-color: hsla(120, 12%, 92%, 1);
+  --tp-label-foreground-color: hsla(130, 7%, 68%, 1);
+  --tp-monitor-background-color: hsla(0, 0%, 0%, 0.25);
+  --tp-monitor-foreground-color: hsla(120, 12%, 92%, 1);
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 4;
+  width: 260px;
+  backdrop-filter: blur(18px);
+}
