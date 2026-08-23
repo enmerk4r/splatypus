@@ -18,9 +18,11 @@ export class SketchOverlay {
   private polyline?: {
     points: number[];
     closed: boolean;
+    closeHint?: boolean;
     labels: { x: number; y: number; text: string }[];
   };
   private badge?: { x: number; y: number; text: string; accent?: boolean };
+  private snap?: { x: number; y: number };
   private frame = 0;
 
   constructor(
@@ -62,13 +64,26 @@ export class SketchOverlay {
     this.schedule();
   }
 
-  /** An outline in progress (canvas-relative xy pairs) with per-segment labels; undefined clears it. */
+  /**
+   * An outline in progress (canvas-relative xy pairs) with per-segment labels; undefined
+   * clears it. `closeHint` rings the first point to say "a click here closes the outline".
+   */
   setPolyline(polyline?: {
     points: number[];
     closed: boolean;
+    closeHint?: boolean;
     labels: { x: number; y: number; text: string }[];
   }): void {
     this.polyline = polyline;
+    this.schedule();
+  }
+
+  /**
+   * The point a picking tool is snapped to (canvas-relative) — a ring and dot that say
+   * "this is the splat you will get"; undefined clears it.
+   */
+  setSnap(snap?: { x: number; y: number }): void {
+    this.snap = snap;
     this.schedule();
   }
 
@@ -175,6 +190,22 @@ export class SketchOverlay {
         ctx.fillStyle = i === 0 ? '#b8f34a' : '#ffffff';
         ctx.fill();
       }
+      if (polyline.closeHint && pts.length >= 2) {
+        // Close target: a halo ring around the start point, with a dark rim for contrast.
+        ctx.beginPath();
+        ctx.arc(pts[0]!, pts[1]!, 11, 0, Math.PI * 2);
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+        ctx.stroke();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#b8f34a';
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(pts[0]!, pts[1]!, 17, 0, Math.PI * 2);
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(184,243,74,0.35)';
+        ctx.stroke();
+      }
       ctx.font = '600 11px SFMono-Regular, Consolas, monospace';
       ctx.textBaseline = 'middle';
       for (const label of polyline.labels) {
@@ -217,6 +248,38 @@ export class SketchOverlay {
       ctx.fillStyle = measure.fixed ? '#b8f34a' : '#ffffff';
       ctx.textBaseline = 'middle';
       ctx.fillText(measure.label, lx + 6, ly + 9);
+      ctx.restore();
+    }
+    const snap = this.snap;
+    if (snap) {
+      ctx.save();
+      ctx.lineCap = 'round';
+      // Ring + centre dot + four short ticks: reads as a target without hiding the splat.
+      for (const [width, colour] of [
+        [4, 'rgba(0,0,0,0.55)'],
+        [1.5, '#b8f34a'],
+      ] as const) {
+        ctx.lineWidth = width;
+        ctx.strokeStyle = colour;
+        ctx.beginPath();
+        ctx.arc(snap.x, snap.y, 8, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        for (const [dx, dy] of [
+          [1, 0],
+          [-1, 0],
+          [0, 1],
+          [0, -1],
+        ] as const) {
+          ctx.moveTo(snap.x + dx * 10, snap.y + dy * 10);
+          ctx.lineTo(snap.x + dx * 14, snap.y + dy * 14);
+        }
+        ctx.stroke();
+      }
+      ctx.beginPath();
+      ctx.arc(snap.x, snap.y, 2.5, 0, Math.PI * 2);
+      ctx.fillStyle = '#b8f34a';
+      ctx.fill();
       ctx.restore();
     }
     const badge = this.badge;

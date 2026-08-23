@@ -230,15 +230,16 @@ Details: [docs/PHASE4_NOTES.md](docs/PHASE4_NOTES.md).
 
 ## Measure / scale to reference
 
-Press `M` (ruler in the toolbar), click two points on the active layer — the live readout shows
-their distance — then type the real distance and **Scale layer**: the layer is scaled uniformly
+Press `M` (ruler in the toolbar), click two points on the active layer — a lime target marks the
+splat the pointer is snapped to, and the live readout shows their distance — then type the real distance and **Scale layer**: the layer is scaled uniformly
 about the first point so the two points are that far apart (one undoable transform). Use it to
 bring phone scans, point clouds and imported objects to true size before sketching or measuring.
 
 ## Mesh layers (draw a face → extrude)
 
 Press `P` and pick a shape in the **MODEL** panel — freeform **polyline** (Enter / double-click /
-a click on the first point closes it, Backspace removes a point), **rectangle** (two corners),
+a click on the first point closes it — the start point gets a ring and the outline previews
+closed when you are near enough, Backspace removes a point), **rectangle** (two corners),
 regular **polygon** (centre + radius, 3–24 sides) or **circle** (centre + radius). Outlines are
 drawn on a horizontal plane whose height comes from the surface under the first click, else the
 grid — or, when the **work plane** is shown (`K` / Tools ▸ Work plane: move or rotate it with its

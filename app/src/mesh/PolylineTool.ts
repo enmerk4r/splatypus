@@ -29,6 +29,9 @@ function emptyStore(): SplatStore {
   });
 }
 
+/** Pixel radius around the start point within which a click closes the polyline. */
+const CLOSE_PIXELS = 12;
+
 function format(metres: number): string {
   if (metres < 0.01) return `${(metres * 1000).toFixed(0)} mm`;
   if (metres < 1) return `${(metres * 100).toFixed(1)} cm`;
@@ -240,21 +243,27 @@ export class PolylineTool {
     const point = this.planePoint(event);
     if (!point) return;
     if (shape === 'polyline') {
-      const first = this.points[0];
-      if (first && this.points.length >= 3 && !this.hasDims()) {
-        const a = this.project(first);
-        const rect = this.canvas.getBoundingClientRect();
-        if (
-          a &&
-          Math.hypot(a.x - (event.clientX - rect.left), a.y - (event.clientY - rect.top)) < 10
-        ) {
-          this.finishPolyline();
-          return;
-        }
+      const rect = this.canvas.getBoundingClientRect();
+      if (this.nearStart({ x: event.clientX - rect.left, y: event.clientY - rect.top })) {
+        this.finishPolyline();
+        return;
       }
     }
     this.place(point);
   };
+
+  /**
+   * True when a click at this canvas position would close the polyline: three or more
+   * points down, no typed dimension pending, and the pointer within `CLOSE_PIXELS` of the
+   * start. The preview uses the same test so what it shows is exactly what a click does.
+   */
+  private nearStart(at: { x: number; y: number } | undefined): boolean {
+    const first = this.points[0];
+    if (!at || !first || this.options.settings.shape !== 'polyline') return false;
+    if (this.points.length < 3 || this.hasDims()) return false;
+    const a = this.project(first);
+    return Boolean(a && Math.hypot(a.x - at.x, a.y - at.y) < CLOSE_PIXELS);
+  }
 
   /** Places the next point: a polyline vertex, or the defining point of a two-click shape. */
   private place(point: Vector3): void {
@@ -488,8 +497,13 @@ export class PolylineTool {
     const shape = this.options.settings.shape;
     let pts: Vector3[];
     let closed = false;
+    // Near the start point the rubber band snaps onto it and the outline previews as closed,
+    // so it is obvious that the next click finishes the shape rather than adding a vertex.
+    const closing = this.nearStart(this.pointer);
     if (shape === 'polyline') {
-      pts = [...this.points, ...(this.hover ? [this.hover] : [])];
+      const end = closing ? this.points[0] : this.hover;
+      pts = [...this.points, ...(end ? [end] : [])];
+      closed = closing;
     } else {
       const outline = this.hover ? this.shapeOutline(this.points[0]!, this.hover) : [];
       pts = outline.length >= 3 ? outline : this.points;
@@ -512,7 +526,8 @@ export class PolylineTool {
           });
       }
     }
-    if (closed && labelled && pts.length >= 3) {
+    if (closed && labelled && pts.length >= 3 && shape !== 'polyline') {
+      // (A closing polyline ends on its start point, so the loop above labelled that edge.)
       const a = this.project(pts[0]!),
         b = this.project(pts[pts.length - 1]!);
       if (a && b)
@@ -529,8 +544,8 @@ export class PolylineTool {
         : 0;
       if (centre && r > 0) labels.push({ x: centre.x, y: centre.y - 14, text: `r ${format(r)}` });
     }
-    this.options.overlay.setPolyline({ points: screen, closed, labels });
-    const badge = this.badgeText();
+    this.options.overlay.setPolyline({ points: screen, closed, closeHint: closing, labels });
+    const badge = closing ? 'Click to close' : this.badgeText();
     const at = this.pointer ?? (this.hover ? this.project(this.hover) : undefined);
     this.options.overlay.setBadge(
       badge && at ? { x: at.x + 16, y: at.y + 16, text: badge, accent: true } : undefined,

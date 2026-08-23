@@ -50,6 +50,8 @@ export class MeasureTool {
   private a?: Vector3;
   private b?: Vector3;
   private hover?: Vector3;
+  /** The splat under the pointer right now — what a click would pick; drawn as a snap marker. */
+  private snap?: Vector3;
   private readonly input: HTMLInputElement;
 
   constructor(
@@ -74,10 +76,11 @@ export class MeasureTool {
   /** Clears the points and hides the popover. Returns true if there was anything to clear. */
   readonly reset = (): boolean => {
     const had = Boolean(this.a);
-    this.a = this.b = this.hover = undefined;
+    this.a = this.b = this.hover = this.snap = undefined;
     this.layer = undefined;
     this.options.popover.hidden = true;
     this.options.overlay.setMeasure(undefined);
+    this.options.overlay.setSnap(undefined);
     return had;
   };
 
@@ -95,8 +98,18 @@ export class MeasureTool {
     if (!this.active) {
       this.reset();
       this.options.overlay.hideCursor();
+      this.options.overlay.setSnap(undefined);
     }
   };
+
+  /** The layer a click would measure, without the warning `target` raises (used on hover). */
+  private candidate(document: Document): Layer | undefined {
+    const layer =
+      this.layer ??
+      document.active() ??
+      (document.layers.length === 1 ? document.layers[0] : undefined);
+    return layer && !layer.locked ? layer : undefined;
+  }
 
   private target(document: Document): Layer | undefined {
     const layer =
@@ -165,12 +178,15 @@ export class MeasureTool {
     if (!this.active) return;
     const rect = this.canvas.getBoundingClientRect();
     this.options.overlay.setCursor(event.clientX - rect.left, event.clientY - rect.top, 0);
-    if (!this.a || this.b) return;
-    const layer = this.layer;
+    const document = this.viewer.document;
+    if (!document || this.b) return;
+    const layer = this.candidate(document);
     if (!layer) return;
-    // Follow the surface under the pointer so the live readout measures real geometry.
+    // Follow the surface under the pointer so the live readout measures real geometry, and
+    // mark the splat that would be picked so "is it snapping?" never has to be guessed.
     const point = this.pick(event, layer);
-    if (point) this.hover = point;
+    this.snap = point;
+    if (point && this.a) this.hover = point;
     this.draw();
   };
 
@@ -223,8 +239,10 @@ export class MeasureTool {
     popover.style.top = `${rect.top + y}px`;
   }
 
-  /** Re-projects the measurement every frame so it tracks the camera. */
+  /** Re-projects the measurement and snap marker every frame so they track the camera. */
   private readonly draw = (): void => {
+    const snap = this.snap && !this.b ? this.project(this.snap) : undefined;
+    this.options.overlay.setSnap(snap);
     if (!this.a) return;
     const end = this.b ?? this.hover;
     const a = this.project(this.a);
