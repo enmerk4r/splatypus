@@ -10,8 +10,17 @@ import type { CameraRig } from './CameraRig';
 
 export type TransformMode = 'translate' | 'rotate' | 'scale';
 
+/** Live readout of a gizmo drag (angle / factor / distance) at a canvas-relative point. */
+export interface GizmoReadout {
+  text: string;
+  x: number;
+  y: number;
+}
+
 export class LayerGizmo {
   private readonly controls: TransformControls;
+  /** Called with the current drag readout while dragging, then with undefined once it ends. */
+  onReadout?: (readout: GizmoReadout | undefined) => void;
   /** Shared transform origin used when several layers are selected. */
   private readonly pivot = new Object3D();
   private document?: Document;
@@ -28,8 +37,8 @@ export class LayerGizmo {
 
   constructor(
     scene: Scene,
-    camera: PerspectiveCamera,
-    canvas: HTMLCanvasElement,
+    private readonly camera: PerspectiveCamera,
+    private readonly canvas: HTMLCanvasElement,
     private readonly cameraRig: CameraRig,
   ) {
     this.controls = new TransformControls(camera, canvas);
@@ -54,6 +63,11 @@ export class LayerGizmo {
 
   setMode(mode: TransformMode): void {
     this.controls.setMode(mode);
+  }
+
+  /** Rotation drags snap to multiples of `radians` (null = free). */
+  setRotationSnap(radians: number | null): void {
+    this.controls.rotationSnap = radians;
   }
 
   get mode(): TransformMode {
@@ -142,7 +156,52 @@ export class LayerGizmo {
 
   private readonly onDraggingChanged = (event: { value?: unknown }): void => {
     this.cameraRig.controls.enabled = event.value !== true && this.cameraRig.mode === 'orbit';
+    if (event.value !== true) this.onReadout?.(undefined);
   };
+
+  /** Text for the drag in progress: rotation angle, scale factor or move distance. */
+  private readout(object: Object3D): GizmoReadout | undefined {
+    const mode = this.controls.getMode();
+    let text: string;
+    if (mode === 'rotate') {
+      // Public on TransformControls (the drag's accumulated angle) but missing from its typings.
+      const radians = (this.controls as unknown as { rotationAngle: number }).rotationAngle;
+      const degrees = (radians * 180) / Math.PI;
+      const axis = this.controls.axis;
+      const label = axis === 'X' || axis === 'Y' || axis === 'Z' ? `${axis} ` : '';
+      text = `${label}${degrees >= 0 ? '+' : '−'}${Math.abs(degrees).toFixed(1)}°`;
+    } else if (mode === 'scale') {
+      const reference = object === this.pivot ? new Vector3(1, 1, 1) : this.startScale;
+      const factor = [
+        object.scale.x / (reference.x || 1),
+        object.scale.y / (reference.y || 1),
+        object.scale.z / (reference.z || 1),
+      ];
+      const uniform =
+        Math.abs(factor[0]! - factor[1]!) < 1e-6 && Math.abs(factor[1]! - factor[2]!) < 1e-6;
+      text = uniform
+        ? `×${factor[0]!.toFixed(3)}`
+        : `×${factor.map((value) => value.toFixed(2)).join(' · ')}`;
+    } else {
+      const before = object === this.pivot ? this.pivotBefore : this.before;
+      if (!before) return undefined;
+      const start = new Vector3().setFromMatrixPosition(before);
+      const metres = object.position.distanceTo(start);
+      text =
+        metres < 0.01
+          ? `${(metres * 1000).toFixed(0)} mm`
+          : metres < 1
+            ? `${(metres * 100).toFixed(1)} cm`
+            : `${metres.toFixed(3)} m`;
+    }
+    const rect = this.canvas.getBoundingClientRect();
+    const ndc = object.getWorldPosition(new Vector3()).project(this.camera);
+    return {
+      text,
+      x: ((ndc.x + 1) / 2) * rect.width + 18,
+      y: ((1 - ndc.y) / 2) * rect.height - 30,
+    };
+  }
 
   private readonly onMouseDown = (): void => {
     const object = this.controls.object as Object3D | undefined;
@@ -181,6 +240,7 @@ export class LayerGizmo {
         );
         selected.object.updateMatrixWorld(true);
       }
+      this.onReadout?.(this.readout(object));
       return;
     }
     if (!layer) return;
@@ -206,6 +266,7 @@ export class LayerGizmo {
     }
     object.updateMatrix();
     object.updateMatrixWorld(true);
+    this.onReadout?.(this.readout(object));
     // No layer-changed event per drag frame: the SetLayerTransform command on mouseUp
     // notifies once, so panels/grid don't rebuild 60× per second while dragging.
   };

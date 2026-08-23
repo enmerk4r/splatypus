@@ -3,14 +3,20 @@ import {
   BufferGeometry,
   Color,
   EdgesGeometry,
+  Group,
   LineBasicMaterial,
   LineSegments,
   Mesh,
+  DoubleSide,
   MeshLambertMaterial,
   Object3D,
 } from 'three';
 import type { Vector3 } from 'three';
-import { SplatMesh } from '@sparkjsdev/spark';
+import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
+import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
+import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
+import { dyno, SplatMesh } from '@sparkjsdev/spark';
+import { lineResolution, SELECTION_ACCENT_HEX } from '../viewer/highlight';
 import type { PointCloudInfo } from '../io/pointCloud';
 import { solidBounds } from '../mesh/solid';
 import type { SolidData } from '../mesh/solid';
@@ -63,8 +69,16 @@ export class Layer extends EventTarget {
   private storeToPackedValue?: Int32Array;
   private solidValue?: SolidData;
   private solidObjectValue?: Mesh;
-  private solidEdges?: LineSegments;
+  private solidEdges?: Object3D;
+  /** Geometry/materials behind `solidEdges`, disposed when the edges are rebuilt. */
+  private edgeResources: { dispose(): void }[] = [];
   private shown = true;
+  private selectedValue = false;
+  /**
+   * 0..1 selection highlight amount read by the splat generator (`selectionModifier`): a
+   * uniform, so selecting a layer tints/brightens its splats without rebuilding the mesh.
+   */
+  readonly highlight = new dyno.DynoFloat({ value: 0 });
 
   constructor(options: LayerOptions) {
     super();
@@ -100,6 +114,81 @@ export class Layer extends EventTarget {
     return this.solidObjectValue;
   }
 
+  /** Whether the layer is drawn with its selection cue (set by the viewer from the document selection). */
+  get selected(): boolean {
+    return this.selectedValue;
+  }
+
+  /**
+   * Selection cue: splats are nudged towards the accent and brightened (uniform, no rebuild);
+   * a mesh's edges become thick glowing accent lines.
+   */
+  setSelected(selected: boolean): void {
+    if (selected === this.selectedValue) return;
+    this.selectedValue = selected;
+    this.highlight.value = selected ? 1 : 0;
+    this.meshValue.updateVersion();
+    if (this.solidObjectValue) this.rebuildEdges(this.solidObjectValue);
+  }
+
+  /** (Re)creates the edge lines of the solid's mesh for the current face/selection state. */
+  private rebuildEdges(mesh: Mesh): void {
+    this.disposeEdges();
+    const isFace = this.solidValue?.face !== undefined;
+    const edges = new EdgesGeometry(mesh.geometry, 20);
+    let lines: Object3D;
+    if (this.selectedValue) {
+      // Glow: a wide translucent accent line under a crisp one (pixel widths via LineMaterial).
+      const geometry = new LineSegmentsGeometry().fromEdgesGeometry(edges);
+      edges.dispose();
+      const halo = new LineMaterial({
+        color: SELECTION_ACCENT_HEX,
+        linewidth: 10,
+        transparent: true,
+        opacity: 0.35,
+        depthWrite: false,
+      });
+      const core = new LineMaterial({
+        color: SELECTION_ACCENT_HEX,
+        linewidth: 3,
+        transparent: true,
+        opacity: 1,
+        depthWrite: false,
+      });
+      // Share the viewer's resolution vector so resizes need no per-material update.
+      for (const material of [halo, core])
+        (material.uniforms.resolution as { value: unknown }).value = lineResolution;
+      const group = new Group();
+      const haloLines = new LineSegments2(geometry, halo);
+      const coreLines = new LineSegments2(geometry, core);
+      haloLines.renderOrder = 1;
+      coreLines.renderOrder = 2;
+      group.add(haloLines, coreLines);
+      lines = group;
+      this.edgeResources = [geometry, halo, core];
+    } else {
+      const material = new LineBasicMaterial({
+        color: isFace ? SELECTION_ACCENT_HEX : 0x000000,
+        transparent: true,
+        opacity: isFace ? 0.9 : 0.35,
+      });
+      lines = new LineSegments(edges, material);
+      this.edgeResources = [edges, material];
+    }
+    lines.name = 'Solid edges';
+    mesh.add(lines);
+    this.solidEdges = lines;
+  }
+
+  private disposeEdges(): void {
+    const edges = this.solidEdges;
+    if (!edges) return;
+    edges.removeFromParent();
+    this.edgeResources.forEach((resource) => resource.dispose());
+    this.edgeResources = [];
+    this.solidEdges = undefined;
+  }
+
   /** Replaces the triangle mesh (and its render object). */
   setSolid(solid: SolidData | undefined): void {
     this.disposeSolid();
@@ -111,20 +200,21 @@ export class Layer extends EventTarget {
     const geometry = indexed.toNonIndexed();
     geometry.computeVertexNormals();
     indexed.dispose();
+    const isFace = solid.face !== undefined;
     const material = new MeshLambertMaterial({
       color: new Color(solid.colour[0], solid.colour[1], solid.colour[2]),
       flatShading: true,
+      // An unextruded face is a translucent, double-sided sheet until it is extruded.
+      side: isFace ? DoubleSide : undefined,
+      transparent: isFace,
+      opacity: isFace ? 0.45 : 1,
+      depthWrite: !isFace,
     });
     const mesh = new Mesh(geometry, material);
     mesh.name = `Solid: ${this.name}`;
     mesh.visible = this.shown;
-    const edges = new LineSegments(
-      new EdgesGeometry(geometry, 20),
-      new LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35 }),
-    );
-    mesh.add(edges);
-    this.solidEdges = edges;
     this.solidObjectValue = mesh;
+    this.rebuildEdges(mesh);
     this.object.add(mesh);
   }
 
@@ -254,16 +344,12 @@ export class Layer extends EventTarget {
   }
 
   private disposeSolid(): void {
+    this.disposeEdges();
     if (this.solidObjectValue) {
       this.solidObjectValue.removeFromParent();
       this.solidObjectValue.geometry.dispose();
       (this.solidObjectValue.material as MeshLambertMaterial).dispose();
       this.solidObjectValue = undefined;
-    }
-    if (this.solidEdges) {
-      this.solidEdges.geometry.dispose();
-      (this.solidEdges.material as LineBasicMaterial).dispose();
-      this.solidEdges = undefined;
     }
   }
 

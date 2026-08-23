@@ -189,16 +189,16 @@ describe('growSelection', () => {
   });
 });
 
-describe('VoxelGrid.forEachInRadius', () => {
+describe('VoxelGrid.forEachWithin', () => {
   it('visits exactly the points inside the radius', () => {
     const centres = new Float32Array([0, 0, 0, 0.1, 0, 0, 5, 0, 0, 0, 0.3, 0]);
     const grid = new VoxelGrid(centres, 0.2);
     const hits: number[] = [];
-    grid.forEachInRadius(0, 0, 0, 0.2, (index) => hits.push(index));
+    grid.forEachWithin(0, 0, 0, 0.2, (index) => hits.push(index));
     expect(hits.sort()).toEqual([0, 1]);
 
     const wide: number[] = [];
-    grid.forEachInRadius(0, 0, 0, 0.35, (index) => wide.push(index));
+    grid.forEachWithin(0, 0, 0, 0.35, (index) => wide.push(index));
     expect(wide.sort()).toEqual([0, 1, 3]);
   });
 });

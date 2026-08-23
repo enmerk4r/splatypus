@@ -4,6 +4,8 @@ import type { Layer } from '../model/Layer';
 
 /** Produces the display colour for a store index. */
 export type ColourAt = (storeIndex: number, out: Color) => void;
+/** Produces the temporary display opacity for a store index. */
+export type OpacityAt = (storeIndex: number) => number;
 
 /**
  * Writes display colours straight into a layer's packed GPU cache, leaving the store
@@ -11,9 +13,15 @@ export type ColourAt = (storeIndex: number, out: Color) => void;
  * tints and the group overlay are purely a view. A resync rebuilds the cache from the
  * store, so callers repaint on the layer's `synced` event.
  *
- * Only the low three bytes of word 0 are written; the top byte holds opacity.
+ * Colour-only paints preserve opacity. A temporary opacity callback is used by views such
+ * as the flat segmentation mask and never changes the store.
  */
-export function paintSplats(layer: Layer, colourAt: ColourAt, indices?: Iterable<number>): void {
+export function paintSplats(
+  layer: Layer,
+  colourAt: ColourAt,
+  indices?: Iterable<number>,
+  opacityAt?: OpacityAt,
+): void {
   const packed = layer.mesh.packedSplats;
   const array = packed?.packedArray;
   if (!packed || !array) return;
@@ -25,6 +33,7 @@ export function paintSplats(layer: Layer, colourAt: ColourAt, indices?: Iterable
     if (packedIndex < 0) return;
     colourAt(storeIndex, out);
     utils.setPackedSplatRgb(array, packedIndex, out.r, out.g, out.b, encoding);
+    if (opacityAt) utils.setPackedSplatOpacity(array, packedIndex, opacityAt(storeIndex));
   };
   if (indices) for (const index of indices) write(index);
   else for (let index = 0; index < layer.store.count; index += 1) write(index);

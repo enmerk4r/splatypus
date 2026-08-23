@@ -119,6 +119,26 @@ composes both resizes.
 This is worth knowing because the same trap applies to any future prompt type (boxes, masks):
 anything handed directly to the model, rather than through the processor, is in reshaped space.
 
+## Follow-up after merging the region-selection work
+
+`select/RegionTool.ts` and friends landed on `main` in parallel with this, and there is
+overlap worth reconciling — nothing broken, but two ways to do the same thing:
+
+- **`FrontDepth` vs `DepthGrid`.** Both answer "how far away is the front surface at this
+  pixel", and both exist to stop a selection grabbing the wall behind the object. `FrontDepth`
+  is the better one: it reports a cell's *third*-nearest depth rather than its nearest, so a
+  floater cannot drag the front surface towards the camera. `liftMask` should move onto it —
+  that directly addresses the "thin or porous surfaces leak" limitation below. Deferred
+  because it changes selection behaviour and needs verifying against a real scan, not a test
+  fixture.
+- **`ScreenMask` vs `MaskImage`.** Less pressing. `ScreenMask` rasterises a *drawn* shape and
+  carries a signed distance field for snapping; `MaskImage` is a binary image handed over by
+  a model. Different enough to justify both, but if a third mask source appears they should
+  become one type.
+- `VoxelGrid.forEachInRadius` (added here) and `VoxelGrid.forEachWithin` (added on `main`)
+  were the same method. Resolved during the merge by keeping `forEachWithin`, which also
+  reports the squared distance.
+
 ## Known sharp edges
 
 - **LoD layers (≥ 1.5 M splats) show no tint** — Spark renders its own LoD copy, so

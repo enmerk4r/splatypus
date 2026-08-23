@@ -19,8 +19,20 @@
   align-items: center;
   gap: 10px;
   margin-bottom: 12px;
+  color: inherit;
   font-weight: 800;
   letter-spacing: 0.15em;
+  text-decoration: none;
+}
+
+.brand:hover {
+  color: var(--lime);
+}
+
+.brand:focus-visible {
+  border-radius: 3px;
+  outline: 1px solid var(--lime);
+  outline-offset: 3px;
 }
 
 .brand-mark {

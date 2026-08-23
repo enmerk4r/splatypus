@@ -20,6 +20,7 @@ export class SketchOverlay {
     closed: boolean;
     labels: { x: number; y: number; text: string }[];
   };
+  private badge?: { x: number; y: number; text: string; accent?: boolean };
   private frame = 0;
 
   constructor(
@@ -68,6 +69,12 @@ export class SketchOverlay {
     labels: { x: number; y: number; text: string }[];
   }): void {
     this.polyline = polyline;
+    this.schedule();
+  }
+
+  /** A floating readout (typed dimension, gizmo angle…) at a canvas-relative point; undefined clears it. */
+  setBadge(badge?: { x: number; y: number; text: string; accent?: boolean }): void {
+    this.badge = badge;
     this.schedule();
   }
 
@@ -210,6 +217,23 @@ export class SketchOverlay {
       ctx.fillStyle = measure.fixed ? '#b8f34a' : '#ffffff';
       ctx.textBaseline = 'middle';
       ctx.fillText(measure.label, lx + 6, ly + 9);
+      ctx.restore();
+    }
+    const badge = this.badge;
+    if (badge) {
+      ctx.save();
+      ctx.font = '600 12px SFMono-Regular, Consolas, monospace';
+      const width = ctx.measureText(badge.text).width + 12;
+      const bx = Math.min(Math.max(badge.x, 4), this.canvas.clientWidth - width - 4);
+      const by = Math.max(badge.y, 4);
+      ctx.fillStyle = 'rgba(15,18,17,0.9)';
+      ctx.fillRect(bx, by, width, 20);
+      ctx.strokeStyle = badge.accent ? '#b8f34a' : 'rgba(255,255,255,0.25)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(bx + 0.5, by + 0.5, width - 1, 19);
+      ctx.fillStyle = badge.accent ? '#b8f34a' : '#ffffff';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(badge.text, bx + 6, by + 10);
       ctx.restore();
     }
     const cursor = this.cursor;

@@ -122,7 +122,7 @@ export function growSelection(
   for (let step = 0; step < steps && result.length < maxSplats; step += 1) {
     const next: number[] = [];
     for (const splat of frontier) {
-      grid.forEachInRadius(
+      grid.forEachWithin(
         store.centers[splat * 3]!,
         store.centers[splat * 3 + 1]!,
         store.centers[splat * 3 + 2]!,

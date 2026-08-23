@@ -8,6 +8,7 @@ import type { SplatSource } from './io/loadSplat';
 import { getInitialSource } from './io/urlParams';
 import { CropBox } from './select/CropBox';
 import { Segmentation } from './select/Segmentation';
+import { RegionSettingsStore } from './select/regionSettings';
 import { GroupMapError } from './splats/groups';
 import { SketchSettingsStore } from './sketch/settings';
 import { SketchOverlay } from './sketch/SketchOverlay';
@@ -15,11 +16,16 @@ import { SketchTool } from './sketch/SketchTool';
 import { AiSelectTool } from './select/AiSelectTool';
 import { MeasureTool } from './sketch/MeasureTool';
 import { PolylineTool } from './mesh/PolylineTool';
+import { ExtrudeGizmo } from './mesh/ExtrudeGizmo';
+import { ModelSettingsStore, ORTHO_ROTATION_STEP } from './mesh/settings';
+import { createModelPanel } from './ui/modelPanel';
+import type { GizmoReadout } from './viewer/LayerGizmo';
 import { createExportDialog } from './ui/exportDialog';
 import { createHoverLabel } from './ui/hoverLabel';
 import { Hud } from './ui/hud';
 import { createLayersPanel } from './ui/layersPanel';
 import { createPanel } from './ui/panel';
+import { createRegionPanel } from './ui/regionPanel';
 import { createSegmentPanel } from './ui/segmentPanel';
 import { createSketchPanel } from './ui/sketchPanel';
 import { createToolbar } from './ui/toolbar';
@@ -64,6 +70,7 @@ async function bootstrap(): Promise<void> {
   const flyHint = element('fly-hint');
   const imports = new AppImports(viewer, hud, emptyState);
   const segmentation = new Segmentation(viewer);
+  const regionSettings = new RegionSettingsStore();
   const crop = new CropBox(viewer);
   const sketchSettings = new SketchSettingsStore();
   const sketchOverlay = new SketchOverlay(
@@ -78,10 +85,26 @@ async function bootstrap(): Promise<void> {
     popover: element<HTMLFormElement>('measure-popover'),
     notify: (message, level) => hud.toast(message, level),
   });
+  const modelSettings = new ModelSettingsStore();
+  // Ortho mode (or Shift) snaps gizmo rotations to 15° steps.
+  const syncRotationSnap = (): void =>
+    viewer.setRotationSnap(modelSettings.orthoActive ? ORTHO_ROTATION_STEP : null);
+  modelSettings.addEventListener('settings-changed', syncRotationSnap);
+  syncRotationSnap();
+  // Live angle / factor / distance readout next to the gizmo while dragging it.
+  const onGizmoReadout = (event: Event): void =>
+    sketchOverlay.setBadge((event as CustomEvent<GizmoReadout | undefined>).detail);
+  viewer.addEventListener('gizmo-readout', onGizmoReadout);
   const polylineTool = new PolylineTool(viewer, {
     overlay: sketchOverlay,
-    popover: element<HTMLFormElement>('extrude-popover'),
+    settings: modelSettings,
     colour: () => sketchSettings.snapshot().colour,
+    notify: (message, level) => hud.toast(message, level),
+  });
+  const extrudeGizmo = new ExtrudeGizmo(viewer, {
+    notify: (message, level) => hud.toast(message, level),
+  });
+  const modelPanel = createModelPanel(viewer, modelSettings, extrudeGizmo, element('model-panel'), {
     notify: (message, level) => hud.toast(message, level),
   });
   const sketchTool = new SketchTool(viewer, {
@@ -171,6 +194,13 @@ async function bootstrap(): Promise<void> {
     onAdd: () => addInput.click(),
     notify: (message, level) => hud.toast(message, level),
   });
+  const regionPanel = createRegionPanel(
+    viewer,
+    segmentation,
+    regionSettings,
+    element('region-panel'),
+    { notify: (message, level) => hud.toast(message, level) },
+  );
   const segmentPanel = createSegmentPanel(
     viewer,
     segmentation,
@@ -182,7 +212,7 @@ async function bootstrap(): Promise<void> {
   );
   const sketchPanel = createSketchPanel(viewer, sketchSettings, element('sketch-panel'));
   const hoverLabel = createHoverLabel(element('hover-label'), segmentation);
-  const toolbar = createToolbar(viewer, segmentation, crop, element('toolbar'), {
+  const toolbar = createToolbar(viewer, segmentation, crop, regionSettings, element('toolbar'), {
     notify: (message, level) => hud.toast(message, level),
   });
   const exportDialog = createExportDialog(
@@ -259,9 +289,13 @@ async function bootstrap(): Promise<void> {
       viewer,
       imports,
       segmentation,
+      regionSettings,
+      regionTool: toolbar.regionTool,
       crop,
       sketchTool,
       sketchSettings,
+      extrudeGizmo,
+      modelSettings,
     };
 
   window.addEventListener('beforeunload', (event) => {
@@ -274,6 +308,7 @@ async function bootstrap(): Promise<void> {
       disposeShortcuts();
       panel.dispose();
       layersPanel.dispose();
+      regionPanel.dispose();
       segmentPanel.dispose();
       sketchPanel.dispose();
       hoverLabel.dispose();
@@ -285,6 +320,11 @@ async function bootstrap(): Promise<void> {
       measureTool.dispose();
       aiSelectTool.dispose();
       polylineTool.dispose();
+      extrudeGizmo.dispose();
+      modelPanel.dispose();
+      modelSettings.removeEventListener('settings-changed', syncRotationSnap);
+      modelSettings.dispose();
+      viewer.removeEventListener('gizmo-readout', onGizmoReadout);
       sketchOverlay.dispose();
       viewer.dispose();
     },

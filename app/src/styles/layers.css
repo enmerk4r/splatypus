@@ -571,6 +571,17 @@
   opacity: 0.32;
 }
 
+.selection-cursor {
+  fill: rgba(184, 243, 74, 0.1);
+  stroke: var(--lime);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.region-body .segment-row label {
+  min-width: 46px;
+}
+
 #viewer.region-selecting {
   cursor: crosshair;
 }

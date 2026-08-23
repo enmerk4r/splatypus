@@ -64,7 +64,12 @@ interface StoredLayer {
     positions: BinaryRef;
     indices: BinaryRef;
     colour: [number, number, number];
-    source?: { kind: 'extrude'; polygon: BinaryRef; baseY: number; height: number };
+    face?: { polygon: BinaryRef; normal: [number, number, number]; height?: number };
+    source?: {
+      kind: 'extrude';
+      face: { polygon: BinaryRef; normal: [number, number, number] };
+      height: number;
+    };
   };
 }
 
@@ -151,12 +156,25 @@ export function writeProject(document: Document, view: ProjectViewState): ArrayB
               positions: payload.add(layer.solid.positions),
               indices: payload.add(layer.solid.indices),
               colour: [...layer.solid.colour] as [number, number, number],
+              ...(layer.solid.face
+                ? {
+                    face: {
+                      polygon: payload.add(layer.solid.face.polygon),
+                      normal: [...layer.solid.face.normal] as [number, number, number],
+                      ...(layer.solid.faceHeight !== undefined
+                        ? { height: layer.solid.faceHeight }
+                        : {}),
+                    },
+                  }
+                : {}),
               ...(layer.solid.source
                 ? {
                     source: {
                       kind: layer.solid.source.kind,
-                      polygon: payload.add(layer.solid.source.polygon),
-                      baseY: layer.solid.source.baseY,
+                      face: {
+                        polygon: payload.add(layer.solid.source.face.polygon),
+                        normal: [...layer.solid.source.face.normal] as [number, number, number],
+                      },
                       height: layer.solid.source.height,
                     },
                   }
@@ -293,12 +311,26 @@ export function readProject(buffer: ArrayBuffer): {
             positions: floats(bytes, payloadStart, stored.solid.positions),
             indices: uints(bytes, payloadStart, stored.solid.indices),
             colour: [...stored.solid.colour] as [number, number, number],
-            ...(stored.solid.source
+            ...(stored.solid.face
+              ? {
+                  face: {
+                    polygon: floats(bytes, payloadStart, stored.solid.face.polygon),
+                    normal: [...stored.solid.face.normal] as [number, number, number],
+                  },
+                  ...(typeof stored.solid.face.height === 'number'
+                    ? { faceHeight: stored.solid.face.height }
+                    : {}),
+                }
+              : {}),
+            // Projects written before faces existed stored `source` differently; drop it then.
+            ...(stored.solid.source?.face
               ? {
                   source: {
                     kind: 'extrude' as const,
-                    polygon: floats(bytes, payloadStart, stored.solid.source.polygon),
-                    baseY: stored.solid.source.baseY,
+                    face: {
+                      polygon: floats(bytes, payloadStart, stored.solid.source.face.polygon),
+                      normal: [...stored.solid.source.face.normal] as [number, number, number],
+                    },
                     height: stored.solid.source.height,
                   },
                 }

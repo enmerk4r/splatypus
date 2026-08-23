@@ -10,7 +10,10 @@ import { baseColour, paintSplats } from '../viewer/paint';
 import type { ColourAt } from '../viewer/paint';
 import type { LayerHit } from '../viewer/picking';
 import type { Viewer } from '../viewer/Viewer';
-import { buildPalette, UNASSIGNED_COLOUR } from './groupPalette';
+import { buildPalette } from './groupPalette';
+import { RegionSelection } from './RegionSelection';
+import type { RegionChange } from './RegionSelection';
+import { bakeGeodesicPatches } from './superpixels';
 
 export interface GroupSelection {
   layer: Layer;
@@ -27,17 +30,25 @@ export interface GroupSelection {
 export type PickOutcome = 'none' | 'missed' | 'unassigned' | 'selected';
 
 /** What a re-bake groups splats by. */
-export type BakeBasis = 'colour' | 'position';
+export type BakeBasis = 'patches' | 'colour' | 'colour-only' | 'position';
 
 const HIGHLIGHT = new Color('#b8f34a');
 const HIGHLIGHT_STRENGTH = 0.65;
 /** Hover lifts towards white rather than the selection colour, so "would get" never looks like "have". */
 const HOVER = new Color('#e8f6ec');
 const HOVER_STRENGTH = 0.3;
-/** Detail 1..5 → colour cell size (coarser cells: fewer, larger groups; finer: more unassigned). */
-const COLOUR_SIZES = [0.3, 0.24, 0.18, 0.12, 0.08];
-/** Detail 1..5 → multiplier on the suggested voxel size, used when colour is ignored. */
-const VOXEL_SCALES = [2, 1.5, 1, 0.7, 0.5];
+/**
+ * With the segmentation overlay on, a lime tint on a field of random patch colours is
+ * invisible. Everything outside the selection is dimmed to this instead, so the selection
+ * reads as the lit part of the mask.
+ */
+const UNSELECTED_DIM = 0.35;
+/** Detail 0..5 → colour cell size (coarser cells: fewer, larger groups; finer: more unassigned). */
+const COLOUR_SIZES = [0.45, 0.3, 0.24, 0.18, 0.12, 0.08];
+/** Detail 0..5 → multiplier on the suggested voxel size, used when colour is ignored. */
+const VOXEL_SCALES = [3, 2, 1.5, 1, 0.7, 0.5];
+/** Detail 0..5 → how many patches the geodesic carve aims for. */
+const PATCH_COUNTS = [30, 80, 200, 500, 1200, 3000];
 
 /**
  * Group selection on top of the layer model: a click picks the nearest splat of the hit
@@ -53,13 +64,22 @@ export class Segmentation extends EventTarget {
   private hoverValue?: GroupSelection;
   private outcomeValue: PickOutcome = 'none';
   private overlayEnabled = false;
-  private blendValue = 0.85;
+  private blendValue = 1;
   private readonly subscribed = new Set<Layer>();
   /** Selected split layers use the same green language as selected unsplit groups. */
   private highlightedLayers = new Set<Layer>();
+  /** Layers currently painted with the mask dimmed around a selection. */
+  private readonly dimmedLayers = new Set<Layer>();
+  /**
+   * The free-form, per-splat selection. Groups answer "what did the baker think this is";
+   * this answers "what do I want", and the two share one highlight colour and one
+   * "Split to layer" because to the hand they are the same act.
+   */
+  readonly region = new RegionSelection();
 
   constructor(private readonly viewer: Viewer) {
     super();
+    this.region.addEventListener('region-changed', this.onRegionChanged);
     viewer.addEventListener('document-changed', this.onDocumentChanged);
     viewer.addEventListener('canvas-click', this.onClick);
     viewer.addEventListener('canvas-hover', this.onHover);
@@ -211,11 +231,29 @@ export class Segmentation extends EventTarget {
     this.dispatchEvent(new Event('selection-changed'));
   }
 
-  /** Lifts the selected group into its own layer (undoable) and selects that layer. */
+  /** Splats currently selected either way, for the UI's enable/disable logic. */
+  get hasSelection(): boolean {
+    return this.selectionValue !== undefined || !this.region.isEmpty;
+  }
+
+  /**
+   * Lifts the current selection into its own layer (undoable) and selects that layer. The
+   * free-form region wins when both exist: it is the one the hand just drew.
+   */
   splitSelection(): Layer | undefined {
     const document = this.document;
+    if (!document) return undefined;
+    const regionLayer = this.region.layer;
+    if (regionLayer && !this.region.isEmpty) {
+      const indices = this.region.indices();
+      this.region.clear();
+      const command = new SplitSplats(document, regionLayer, indices, 'region');
+      document.history.push(command);
+      document.setSelection([command.segment.id]);
+      return command.segment;
+    }
     const selection = this.selectionValue;
-    if (!document || !selection) return undefined;
+    if (!selection) return undefined;
     const command = new SplitSplats(
       document,
       selection.layer,
@@ -261,13 +299,15 @@ export class Segmentation extends EventTarget {
   /** Re-runs the geometric bake over a layer's store and adopts the result. */
   rebake(layer: Layer, basis: BakeBasis, detail: number): { numGroups: number; assigned: number } {
     const store = layer.store;
+    const step = Math.min(Math.max(Math.round(detail), 0), 5);
+    if (basis === 'patches') return this.bakePatches(layer, step);
     const options = suggestOptions(store.centers, store.count);
-    const step = Math.min(Math.max(Math.round(detail), 1), 5) - 1;
     if (basis === 'position') {
       options.colourSize = 0;
       options.voxelSize *= VOXEL_SCALES[step]!;
     } else {
       options.colourSize = COLOUR_SIZES[step]!;
+      options.spatialConnectivity = basis !== 'colour-only';
     }
     // Hidden splats must not bridge objects: give them zero opacity for the bake.
     const opacities = store.opacities.slice();
@@ -282,17 +322,52 @@ export class Segmentation extends EventTarget {
       GroupMap.fromIds(ids, {
         numSplats: store.count,
         numGroups: groups.length,
-        source: basis === 'position' ? 'position' : 'colour + position',
+        source:
+          basis === 'position'
+            ? 'position'
+            : basis === 'colour-only'
+              ? 'colour'
+              : 'colour + position',
         groups,
       }),
     );
     return { numGroups: groups.length, assigned: stats.assigned };
   }
 
+  /**
+   * Carves the layer into patches that partition it, rather than looking for cells that
+   * happen to match. Every splat the graph reaches lands in a patch, so the overlay reads
+   * as a flat segmentation mask instead of a scatter of coloured specks.
+   */
+  private bakePatches(layer: Layer, step: number): { numGroups: number; assigned: number } {
+    const store = layer.store;
+    const { ids, groups, assigned } = bakeGeodesicPatches(
+      store.centers,
+      store.colors,
+      store.count,
+      this.region.graph(layer),
+      PATCH_COUNTS[step]!,
+    );
+    this.applyGroups(
+      layer,
+      GroupMap.fromIds(ids, {
+        numSplats: store.count,
+        numGroups: groups.length,
+        source: 'geodesic patches',
+        groups,
+      }),
+    );
+    return { numGroups: groups.length, assigned };
+  }
+
   setOverlay(enabled: boolean): void {
     if (enabled === this.overlayEnabled) return;
     this.overlayEnabled = enabled;
+    this.dimmedLayers.clear();
+    const regionLayer = this.region.layer;
+    if (regionLayer && this.dimsForRegion(regionLayer)) this.dimmedLayers.add(regionLayer);
     this.segmentedLayers.forEach((layer) => this.repaint(layer));
+    if (regionLayer && !this.segmentedLayers.includes(regionLayer)) this.repaint(regionLayer);
     this.dispatchEvent(new Event('overlay-changed'));
   }
 
@@ -306,8 +381,29 @@ export class Segmentation extends EventTarget {
     this.viewer.removeEventListener('document-changed', this.onDocumentChanged);
     this.viewer.removeEventListener('canvas-click', this.onClick);
     this.viewer.removeEventListener('canvas-hover', this.onHover);
+    this.region.removeEventListener('region-changed', this.onRegionChanged);
+    this.region.dispose();
     this.unsubscribe();
   }
+
+  /** Repaints only what entered or left the free-form selection. */
+  private readonly onRegionChanged = (event: Event): void => {
+    const { layer, added, removed } = (event as CustomEvent<RegionChange>).detail;
+    if (this.document?.getLayer(layer.id)) {
+      const dimming = this.dimsForRegion(layer);
+      if (dimming !== this.dimmedLayers.has(layer)) {
+        // The rule for every *unselected* splat just changed, so nothing incremental will
+        // do — but it only changes when a selection appears or goes away, not as it grows.
+        if (dimming) this.dimmedLayers.add(layer);
+        else this.dimmedLayers.delete(layer);
+        this.repaint(layer);
+      } else {
+        if (removed.length > 0) this.restore(layer, removed);
+        if (added.length > 0) this.tint(layer, added, HIGHLIGHT, HIGHLIGHT_STRENGTH);
+      }
+    }
+    this.dispatchEvent(new Event('region-changed'));
+  };
 
   // ---- picking ----------------------------------------------------------------------
 
@@ -419,16 +515,26 @@ export class Segmentation extends EventTarget {
   /** Display colour before any tint: the store colour, or the group label when the overlay is on. */
   private painter(layer: Layer): ColourAt {
     const groups = layer.groups;
+    const region = this.region;
+    const dimming = this.dimsForRegion(layer);
     if (!this.overlayEnabled || !groups) return (index, out) => void baseColour(layer, index, out);
     const palette = buildPalette(groups.numGroups);
     const blend = this.blendValue;
     const label = new Color();
     return (index, out): void => {
       const id = groups.groupOf(index);
-      if (id === UNASSIGNED || id >= groups.numGroups) label.copy(UNASSIGNED_COLOUR);
-      else label.setRGB(palette[id * 3]!, palette[id * 3 + 1]!, palette[id * 3 + 2]!);
-      baseColour(layer, index, out).lerp(label, blend);
+      if (id === UNASSIGNED || id >= groups.numGroups) baseColour(layer, index, out);
+      else {
+        label.setRGB(palette[id * 3]!, palette[id * 3 + 1]!, palette[id * 3 + 2]!);
+        baseColour(layer, index, out).lerp(label, blend);
+      }
+      if (dimming && !region.has(index)) out.multiplyScalar(UNSELECTED_DIM);
     };
+  }
+
+  /** Whether the mask is currently being dimmed around a selection on this layer. */
+  private dimsForRegion(layer: Layer): boolean {
+    return this.overlayEnabled && this.region.layer === layer && !this.region.isEmpty;
   }
 
   private tint(
@@ -454,13 +560,24 @@ export class Segmentation extends EventTarget {
 
   /** Whole-layer repaint (overlay state) with the current tints put back on top. */
   private repaint(layer: Layer): void {
-    paintSplats(layer, this.painter(layer));
+    const groups = layer.groups;
+    paintSplats(
+      layer,
+      this.painter(layer),
+      undefined,
+      this.overlayEnabled && groups
+        ? (index) =>
+            groups.groupOf(index) === UNASSIGNED ? (layer.store.opacities[index] ?? 1) : 1
+        : (index) => layer.store.opacities[index] ?? 1,
+    );
     if (this.selectionValue?.layer === layer)
       this.tint(layer, this.selectionValue.indices, HIGHLIGHT, HIGHLIGHT_STRENGTH);
     if (this.hoverValue?.layer === layer)
       this.tint(layer, this.hoverValue.indices, HOVER, HOVER_STRENGTH);
     if (this.highlightedLayers.has(layer))
       this.tint(layer, undefined, HIGHLIGHT, HIGHLIGHT_STRENGTH);
+    if (this.region.layer === layer && !this.region.isEmpty)
+      this.tint(layer, this.region.indices(), HIGHLIGHT, HIGHLIGHT_STRENGTH);
   }
 
   // ---- document wiring ---------------------------------------------------------------
@@ -470,6 +587,8 @@ export class Segmentation extends EventTarget {
     this.document?.removeEventListener('layers-changed', this.onLayersChanged);
     this.document?.removeEventListener('selection-changed', this.syncLayerHighlights);
     this.document = this.viewer.document;
+    this.dimmedLayers.clear();
+    this.region.forget();
     this.selectionValue = undefined;
     this.hoverValue = undefined;
     this.highlightedLayers.clear();
@@ -479,6 +598,7 @@ export class Segmentation extends EventTarget {
     this.document?.addEventListener('selection-changed', this.syncLayerHighlights);
     this.onLayersChanged();
     this.syncLayerHighlights();
+    this.dispatchEvent(new Event('region-changed'));
     this.dispatchEvent(new Event('groups-changed'));
     this.dispatchEvent(new Event('selection-changed'));
     this.dispatchEvent(new Event('overlay-changed'));
@@ -502,12 +622,18 @@ export class Segmentation extends EventTarget {
       this.dispatchEvent(new Event('selection-changed'));
     }
     if (this.hoverValue && !layers.has(this.hoverValue.layer)) this.hoverValue = undefined;
+    const regionLayer = this.region.layer;
+    if (regionLayer && !layers.has(regionLayer)) {
+      this.region.forget();
+      this.dispatchEvent(new Event('region-changed'));
+    }
     this.syncLayerHighlights();
   };
 
   private readonly onLayerSynced = (event: Event): void => {
     const layer = event.target as Layer;
-    if (layer.groups || this.highlightedLayers.has(layer)) this.repaint(layer);
+    if (layer.groups || this.highlightedLayers.has(layer) || this.region.layer === layer)
+      this.repaint(layer);
   };
 
   private readonly syncLayerHighlights = (): void => {

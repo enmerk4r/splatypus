@@ -79,6 +79,38 @@ The transform gizmo appears when exactly one unlocked layer is selected. In scal
 
 The right-hand panels (VIEW, LAYERS, SEGMENT) collapse from their headers; the state is remembered per browser. Notifications are colour-coded: lime = info, yellow = warning, amber = error.
 
+## Region selection
+
+Draw over the object and get *those splats* — no bake involved. Pick a method under **Select**
+in the bottom toolbar: **Magic wand**, **Rectangle**, **Lasso**, **Polygon** (click corners,
+double-click or Enter to close) or **Selection brush**. **Shift** adds to the selection,
+**Alt** removes; `Esc` cancels the shape, or clears the selection when there is none in progress.
+
+Each method is **one-shot**: as soon as a selection lands the tool hands the pointer back, so
+the next drag orbits the camera instead of starting another shape. A click that selects nothing
+leaves the tool armed.
+
+Two things run behind every gesture, both in the **SELECT** panel:
+
+- **Depth gate** — keeps only the splats on the front surface under the shape, so a lasso does
+  not also grab the wall behind the object. **Depth** sets how deep the window reaches.
+  (On the sample scene this is the difference between 116 k and 72 k splats for the same lasso.)
+- **Snap to edges** — lets the boundary settle onto a real edge in the cloud instead of the line
+  the hand drew: splats well inside the shape and well outside it compete across the uncertain
+  **Band**, along a path that pays to cross a colour change (**Colour** sets how much).
+
+The **Magic wand** skips the tracing entirely — click the object and the selection grows out to
+its edges; **Wand** is the budget it has to spend.
+
+Then clean the selection up: **Grow** / **Shrink** by one splat's spacing, **Clean up** to drop
+small disconnected pieces, **Keep largest** for just the biggest one, the **Selection brush**
+(Alt) to rub out what is left over. **Split to layer** lifts it into its own layer, where the
+eraser (`X`) and the edit brushes take over. Everything is one undo step.
+
+The smart tools index the layer the first time they are used (~0.6 s per 250 k splats, announced
+by a toast, then cached) and decline above 600 k live splats. Details and measurements:
+[docs/REGION_SELECT_NOTES.md](docs/REGION_SELECT_NOTES.md).
+
 ## Segmentation and object tools
 
 Segmentation is per layer and index-aligned with the layer's splats. It comes from either a
@@ -89,9 +121,22 @@ built-in geometric bake:
 node tools/bake-connectivity.mjs scan.ply scan.groups     # offline, tunable (--voxel --colour --slack --min --opacity)
 ```
 
-In the app, the **SEGMENT** panel runs the same bake on the active layer (**Segment by**
-colour + position / position only, **Detail** 1–5), and **Show labels** paints every group in its
-own colour (grey = unassigned) with a **Blend** slider. `scan.groups` next to a `?url=`-loaded
+In the app, the **SEGMENT** panel runs a bake on the active layer and **Show segmentation**
+paints every group in its own flat colour, with a **Blend** slider. **Segment by** picks how:
+
+- **Surface patches** (default) — *partitions* the layer by walking the same colour-aware
+  neighbour graph the selection tools use, from seeds spread evenly through the cloud. Every
+  splat lands in a patch, so the overlay reads as a real segmentation mask: on the butterfly,
+  185 patches at Detail 2 covering **99.8 %**, in ~0.2 s once the layer is indexed.
+- **Colour + position** / **Colour only** / **Position only** — the connectivity bake, which
+  looks for cells that *match* rather than partitioning, so most splats end up in no group at
+  all (55 groups, **11.7 %** covered on the same scene). Still the right tool when you want only
+  the confidently-uniform regions, and the only one that works above the 600 k graph limit.
+
+**Detail** sets the patch count (30 → 3000) for Surface patches, and the cell size for the
+others. The overlay works while you are selecting: with a region selected everything outside it
+is dimmed, so the selection reads against the mask and you can see the patch borders you are
+trying to follow. `scan.groups` next to a `?url=`-loaded
 `scan.ply` loads automatically; `?groups=<encoded-url>` names one explicitly; dropping a
 `.groups` file attaches it to the active (or only) layer — it must cover exactly that layer's
 splat count.
@@ -178,15 +223,31 @@ their distance — then type the real distance and **Scale layer**: the layer is
 about the first point so the two points are that far apart (one undoable transform). Use it to
 bring phone scans, point clouds and imported objects to true size before sketching or measuring.
 
-## Mesh layers (polyline → extrude)
+## Mesh layers (draw a face → extrude)
 
-Press `P`, click an outline on a horizontal plane (its height comes from the surface under the
-first click, else the grid; segment lengths are shown live, Shift snaps to 45°, Backspace undoes
-a point), close with Enter / double-click / a click on the first point, then type a height: a
-capped mesh in the SKETCH colour becomes a **mesh layer** — moved, rotated, scaled (non-uniformly
-too), duplicated, hidden, soloed and undone like any layer, and click-selectable. Meshes are
-stored as meshes in the Splatypus project and sampled into flat gaussians when you export a PLY
-or merge into a splat layer. Details: [docs/MESH_NOTES.md](docs/MESH_NOTES.md).
+Press `P` and pick a shape in the **MODEL** panel — freeform **polyline** (Enter / double-click /
+a click on the first point closes it, Backspace removes a point), **rectangle** (two corners),
+regular **polygon** (centre + radius, 3–24 sides) or **circle** (centre + radius). Outlines are
+drawn on a horizontal plane whose height comes from the surface under the first click, else the
+grid; segment lengths are shown live. Rhino-style numeric entry: once the first point is down,
+type a dimension (e.g. `2.25`) and the next click only sets the direction — segment length for a
+polyline, radius for a circle/polygon, width `Enter` depth (or `2,1.5`) for a rectangle; Enter
+accepts it, Backspace edits it, Escape clears it. **Ortho** mode keeps polyline segments
+axis-aligned and snaps gizmo rotations to 15° steps — holding Shift temporarily flips it either
+way; the gizmo shows the angle (or scale factor / distance) while you drag. Closing the outline
+creates a translucent, unextruded **face** layer in the SKETCH colour: move, rotate or scale it
+like any layer (e.g. 90° about X to stand it up), then — with the face selected in the Select
+tool — pull the lime arrow that sprouts from its centroid, or type a height in MODEL. Pull as
+many times as you like (each pull is an undo step), then **Confirm** (or Enter) to finalise the
+mesh, or **Reset** to flatten it. Extrusion is always along the face's own normal, so a rotated
+face extrudes sideways. The result is a capped **mesh layer** — moved, rotated, scaled
+(non-uniformly too), duplicated, hidden, soloed and undone like any layer, and click-selectable.
+Meshes are stored as meshes in the Splatypus project and sampled into flat gaussians when you
+export a PLY or merge into a splat layer. Details: [docs/MESH_NOTES.md](docs/MESH_NOTES.md).
+
+Selected layers are easy to spot: a selected mesh draws thick glowing lime edges, and a selected
+splat layer is nudged slightly towards lime and brightened (a per-layer shader uniform, so it
+costs nothing and the detail stays legible); both revert the moment the layer is deselected.
 
 ## Export
 

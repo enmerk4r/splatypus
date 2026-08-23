@@ -1,4 +1,6 @@
 import { Matrix4, Quaternion, Vector3 } from 'three';
+import { scaleSolid } from '../mesh/solid';
+import type { SolidData } from '../mesh/solid';
 import { bakeAnisotropicScale } from './anisotropic';
 import type { Factor3 } from './anisotropic';
 import type { Document } from './Document';
@@ -198,6 +200,7 @@ export class ScaleSplats implements Command {
     scales: Float32Array;
     rotations: Float32Array;
     strokePoints?: Float32Array[];
+    solid?: SolidData;
   };
   constructor(
     private readonly document: Document,
@@ -222,8 +225,10 @@ export class ScaleSplats implements Command {
       ...(layer.kind === 'sketch'
         ? { strokePoints: layer.strokes.map((stroke) => stroke.points.slice()) }
         : {}),
+      ...(layer.solid ? { solid: layer.solid } : {}),
     };
     bakeAnisotropicScale(store, this.factor);
+    if (layer.solid) layer.setSolid(scaleSolid(layer.solid, this.factor));
     for (const stroke of layer.strokes)
       for (let index = 0; index < stroke.points.length; index += 3) {
         stroke.points[index] = (stroke.points[index] ?? 0) * this.factor[0];
@@ -244,6 +249,7 @@ export class ScaleSplats implements Command {
     this.snapshot.strokePoints?.forEach((points, index) =>
       layer.strokes[index]?.points.set(points),
     );
+    if (this.snapshot.solid) layer.setSolid(this.snapshot.solid);
     layer.store.invalidateBounds();
     layer.invalidatePick();
     layer.dirty = true;

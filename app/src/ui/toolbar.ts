@@ -10,8 +10,9 @@ import {
 import { GridArrayLayer, snapToFloorCommand } from '../model/segmentCommands';
 import type { CropBox, CropMode } from '../select/CropBox';
 import type { Segmentation } from '../select/Segmentation';
-import { ScreenSelection } from '../select/ScreenSelection';
-import type { ScreenSelectionMode } from '../select/ScreenSelection';
+import { RegionTool } from '../select/RegionTool';
+import type { RegionToolMode } from '../select/RegionTool';
+import type { RegionSettingsStore } from '../select/regionSettings';
 import type { TransformMode } from '../viewer/LayerGizmo';
 import type { Viewer } from '../viewer/Viewer';
 import type { ToolMode } from '../viewer/Viewer';
@@ -22,6 +23,20 @@ export interface ToolbarCallbacks {
   notify: (message: string, level?: ToastLevel) => void;
 }
 
+/** The region-selection methods, in the order they appear in the Select popover. */
+const SELECTION_MODES: { mode: RegionToolMode; label: string; hint: string }[] = [
+  { mode: 'pointer', label: 'Pointer', hint: 'pick layers and baked groups' },
+  { mode: 'wand', label: 'Magic wand', hint: 'click an object; the selection grows to its edges' },
+  { mode: 'rectangle', label: 'Rectangle select', hint: 'drag a box over the splats to select' },
+  { mode: 'lasso', label: 'Lasso select', hint: 'draw around the splats to select' },
+  {
+    mode: 'polygon',
+    label: 'Polygon select',
+    hint: 'click corners, double-click or Enter to close',
+  },
+  { mode: 'brush', label: 'Selection brush', hint: 'paint splats in; Alt paints them out' },
+];
+
 /**
  * The bottom bar: everything that acts on the object being edited (the active layer)
  * or on the current group selection. It stays in one fixed place rather than following
@@ -31,9 +46,10 @@ export function createToolbar(
   viewer: Viewer,
   segmentation: Segmentation,
   crop: CropBox,
+  regionSettings: RegionSettingsStore,
   host: HTMLElement,
   callbacks: ToolbarCallbacks,
-): { dispose: () => void } {
+): { regionTool: RegionTool; dispose: () => void } {
   const button = (attr: string, name: string, label: string, hint: string): string =>
     `<button type="button" ${attr}="${name}" title="${label} — ${hint}" aria-label="${label}">` +
     `${icon(name)}<span class="sr-only">${label}</span></button>`;
@@ -53,7 +69,7 @@ export function createToolbar(
     <div class="toolbar-rule"></div>
     <div class="toolbar-group">
       ${button('data-tool', 'aiselect', 'AI select (A)', 'click an object; SAM proposes a mask, Alt-click removes a region, Enter commits')}
-      ${button('data-op', 'split', 'Split to layer', 'lift the selected group out of its layer')}
+      ${button('data-op', 'split', 'Split to layer', 'lift the current selection out of its layer')}
     </div>
     <div class="toolbar-rule"></div>
     <div class="toolbar-group" role="group" aria-label="Transform mode">
@@ -91,12 +107,10 @@ export function createToolbar(
       <button type="button">Apply</button>
     </form>
     <div class="selection-popover" role="menu" aria-label="Selection method" hidden>
-      ${['pointer', 'rectangle', 'lasso', 'polygon', 'brush']
-        .map(
-          (mode) =>
-            `<button type="button" data-selection-tool="${mode}" role="menuitem" aria-label="${mode[0]!.toUpperCase()}${mode.slice(1)} selection" title="${mode[0]!.toUpperCase()}${mode.slice(1)} selection">${icon(mode === 'pointer' ? 'select' : mode)}</button>`,
-        )
-        .join('')}
+      ${SELECTION_MODES.map(
+        ({ mode, label, hint }) =>
+          `<button type="button" data-selection-tool="${mode}" role="menuitem" aria-label="${label}" title="${label} — ${hint}">${icon(mode === 'pointer' ? 'select' : mode)}</button>`,
+      ).join('')}
     </div>
     <div class="crop-popover" role="menu" aria-label="Crop controls" hidden>
       ${button('data-crop', 'crop', 'Show crop box', 'toggle the crop box')}
@@ -131,7 +145,10 @@ export function createToolbar(
   const selectionButtons = [
     ...selectionPopover.querySelectorAll<HTMLButtonElement>('[data-selection-tool]'),
   ];
-  const screenSelection = new ScreenSelection(viewer, segmentation);
+  const regionTool = new RegionTool(viewer, segmentation.region, regionSettings, {
+    targetLayer: () => segmentation.targetLayer(),
+    notify: callbacks.notify,
+  });
 
   const setScalePopover = (visible: boolean): void => {
     scalePopover.hidden = !visible;
@@ -170,7 +187,7 @@ export function createToolbar(
   };
 
   const renderSelectionMode = (): void => {
-    const mode = screenSelection.mode;
+    const mode = regionTool.mode;
     selectButton.innerHTML = `${icon(mode === 'pointer' ? 'select' : mode)}<span class="sr-only">Select (Q)</span>`;
     for (const value of selectionButtons)
       value.setAttribute('aria-pressed', String(value.dataset.selectionTool === mode));
@@ -205,7 +222,9 @@ export function createToolbar(
     const allEditable = selected.length > 0 && selected.every((layer) => !layer.locked);
     op('undo').disabled = !document.history.canUndo();
     op('redo').disabled = !document.history.canRedo();
-    op('split').disabled = !groupSelection || groupSelection.layer.locked;
+    const regionLayer = segmentation.region.layer;
+    const splitLayer = !segmentation.region.isEmpty ? regionLayer : groupSelection?.layer;
+    op('split').disabled = !splitLayer || splitLayer.locked;
     op('duplicate').disabled = !editable;
     op('array').disabled = !editable;
     op('crop').disabled = document.layers.length === 0;
@@ -222,7 +241,7 @@ export function createToolbar(
       const mode = modeButton.dataset.mode === 'select' ? 'translate' : modeButton.dataset.mode;
       modeButton.disabled =
         modeButton === selectButton
-          ? !allEditable && segmentation.segmentedLayers.length === 0
+          ? !editable && !allEditable && segmentation.segmentedLayers.length === 0
           : !allEditable || (selected.length > 1 && mode !== 'translate');
       modeButton.setAttribute(
         'aria-pressed',
@@ -333,7 +352,7 @@ export function createToolbar(
       setArrayPopover(false);
       setCropPopover(false);
       if (modeButton !== selectButton) {
-        screenSelection.setMode('pointer');
+        regionTool.setMode('pointer');
         renderSelectionMode();
       }
     });
@@ -341,7 +360,7 @@ export function createToolbar(
   for (const value of selectionButtons)
     value.addEventListener('click', () => {
       viewer.setTool('select');
-      screenSelection.setMode(value.dataset.selectionTool as ScreenSelectionMode);
+      regionTool.setMode(value.dataset.selectionTool as RegionToolMode);
       viewer.setTransformMode('translate');
       renderSelectionMode();
       setSelectionPopover(false);
@@ -491,9 +510,12 @@ export function createToolbar(
   segmentation.addEventListener('selection-changed', render);
   segmentation.addEventListener('groups-changed', render);
   crop.addEventListener('crop-changed', render);
+  // The selection tools are one-shot and drop back to the pointer themselves.
+  regionTool.addEventListener('mode-changed', renderSelectionMode);
   observe();
 
   return {
+    regionTool,
     dispose: (): void => {
       viewer.removeEventListener('document-changed', observe);
       viewer.removeEventListener('transform-mode-changed', render);
@@ -501,6 +523,7 @@ export function createToolbar(
       segmentation.removeEventListener('selection-changed', render);
       segmentation.removeEventListener('groups-changed', render);
       crop.removeEventListener('crop-changed', render);
+      regionTool.removeEventListener('mode-changed', renderSelectionMode);
       observed?.removeEventListener('layers-changed', render);
       observed?.removeEventListener('layer-changed', render);
       observed?.removeEventListener('selection-changed', render);
@@ -516,7 +539,7 @@ export function createToolbar(
       cropResize.removeEventListener('click', onCropResize);
       cropKeep.removeEventListener('click', onCropKeep);
       cropCut.removeEventListener('click', onCropCut);
-      screenSelection.dispose();
+      regionTool.dispose();
     },
   };
 }

@@ -2,20 +2,27 @@ import { ShapeUtils, Vector2, Vector3 } from 'three';
 import type { SplatArrays, StoreBounds } from '../model/SplatStore';
 import { mulberry32 } from '../sketch/stamps';
 
+/** A flat, closed, planar outline (3 coords per point, layer-local) with its unit normal. */
+export interface FaceData {
+  polygon: Float32Array;
+  normal: [number, number, number];
+}
+
 /** Triangle mesh of a `mesh` layer, in layer-local coordinates. */
 export interface SolidData {
   positions: Float32Array; // 3 per vertex
   indices: Uint32Array; // 3 per triangle
   /** Linear RGB 0..1 */
   colour: [number, number, number];
+  /**
+   * Present while the mesh is still an unconfirmed face (rendered translucent, double-sided):
+   * flat when `faceHeight` is unset, otherwise a pulled-but-not-confirmed extrusion.
+   */
+  face?: FaceData;
+  /** Pending extrusion height of an unconfirmed face (see `pendingExtrusion`). */
+  faceHeight?: number;
   /** How it was authored, kept so a project can re-edit it later. */
-  source?: {
-    kind: 'extrude';
-    /** Closed polygon in the plane, as (x, z) pairs in layer-local space. */
-    polygon: Float32Array;
-    baseY: number;
-    height: number;
-  };
+  source?: { kind: 'extrude'; face: FaceData; height: number };
 }
 
 export function solidBounds(positions: Float32Array): StoreBounds {
@@ -42,56 +49,203 @@ export function solidBounds(positions: Float32Array): StoreBounds {
   };
 }
 
+/** Mean of a face's outline points. */
+export function faceCentroid(face: FaceData, out = new Vector3()): Vector3 {
+  out.set(0, 0, 0);
+  const n = face.polygon.length / 3;
+  for (let i = 0; i < n; i += 1) {
+    out.x += face.polygon[i * 3]!;
+    out.y += face.polygon[i * 3 + 1]!;
+    out.z += face.polygon[i * 3 + 2]!;
+  }
+  return n > 0 ? out.divideScalar(n) : out;
+}
+
+/** Orthonormal (u, v) spanning the plane of `normal`, with u × v = normal. */
+function planeBasis(normal: Vector3): { u: Vector3; v: Vector3 } {
+  const helper = Math.abs(normal.y) < 0.9 ? new Vector3(0, 1, 0) : new Vector3(1, 0, 0);
+  const u = new Vector3().crossVectors(helper, normal).normalize();
+  const v = new Vector3().crossVectors(normal, u).normalize();
+  return { u, v };
+}
+
+/** Triangulates the outline (ear clipping) as index triples into the polygon's points, wound towards +normal. */
+function triangulate(face: FaceData): [number, number, number][] {
+  const n = face.polygon.length / 3;
+  if (n < 3) throw new Error('A face needs at least three points.');
+  const normal = new Vector3(...face.normal).normalize();
+  const { u, v } = planeBasis(normal);
+  const point = new Vector3();
+  const contour = Array.from({ length: n }, (_, i) => {
+    point.fromArray(face.polygon, i * 3);
+    return new Vector2(point.dot(u), point.dot(v));
+  });
+  const faces = ShapeUtils.triangulateShape(contour, []);
+  const flip = ShapeUtils.isClockWise(contour);
+  return faces.map(([a, b, c]) => (flip ? [a!, c!, b!] : [a!, b!, c!]));
+}
+
+/** A flat face mesh from an outline: positions = the outline points, indices = its triangulation. */
+export function makeFace(face: FaceData): Omit<SolidData, 'colour'> {
+  const tris = triangulate(face);
+  return {
+    positions: face.polygon.slice(),
+    indices: Uint32Array.from(tris.flat()),
+    face: { polygon: face.polygon.slice(), normal: [...face.normal] as [number, number, number] },
+  };
+}
+
 /**
- * Capped extrusion of a closed polygon lying in a horizontal plane (y = baseY), along +Y
- * by `height` (negative extrudes downwards). Polygon as (x, z) pairs; self-intersecting
- * outlines are not supported (ear clipping).
+ * An unconfirmed face pulled to `height`: the extruded mesh, still flagged as a face so the
+ * gizmo stays attached and it renders translucent. ~0 gives the flat face back.
  */
+export function pendingExtrusion(face: FaceData, height: number): Omit<SolidData, 'colour'> {
+  if (!Number.isFinite(height) || Math.abs(height) < 1e-6) return makeFace(face);
+  const { positions, indices } = extrudeFace(face, height);
+  return {
+    positions,
+    indices,
+    face: { polygon: face.polygon.slice(), normal: [...face.normal] as [number, number, number] },
+    faceHeight: height,
+  };
+}
+
+/** A face scaled per axis: planar still, normal transformed by the inverse transpose. */
+function scaleFace(face: FaceData, factor: readonly [number, number, number]): FaceData {
+  const polygon = face.polygon.slice();
+  for (let i = 0; i < polygon.length; i += 3) {
+    polygon[i] = polygon[i]! * factor[0];
+    polygon[i + 1] = polygon[i + 1]! * factor[1];
+    polygon[i + 2] = polygon[i + 2]! * factor[2];
+  }
+  const normal = new Vector3(
+    face.normal[0] / (factor[0] || 1),
+    face.normal[1] / (factor[1] || 1),
+    face.normal[2] / (factor[2] || 1),
+  ).normalize();
+  return { polygon, normal: [normal.x, normal.y, normal.z] };
+}
+
+/**
+ * Bakes a per-axis (layer-local) scale into a solid. Faces and pending extrusions are
+ * rebuilt from their scaled outline so they stay editable; a confirmed mesh just has its
+ * vertices scaled (its extrusion source survives only a uniform scale).
+ */
+export function scaleSolid(solid: SolidData, factor: readonly [number, number, number]): SolidData {
+  const uniform = Math.abs(factor[0] - factor[1]) < 1e-9 && Math.abs(factor[1] - factor[2]) < 1e-9;
+  const alongNormal = (face: FaceData): number =>
+    Math.hypot(face.normal[0] * factor[0], face.normal[1] * factor[1], face.normal[2] * factor[2]);
+  if (solid.face) {
+    const face = scaleFace(solid.face, factor);
+    const height = solid.faceHeight === undefined ? 0 : solid.faceHeight * alongNormal(solid.face);
+    return { ...pendingExtrusion(face, height), colour: solid.colour };
+  }
+  const positions = solid.positions.slice();
+  for (let i = 0; i < positions.length; i += 3) {
+    positions[i] = positions[i]! * factor[0];
+    positions[i + 1] = positions[i + 1]! * factor[1];
+    positions[i + 2] = positions[i + 2]! * factor[2];
+  }
+  const indices = solid.indices.slice();
+  if (factor[0] * factor[1] * factor[2] < 0) {
+    // A mirroring scale flips the winding; restore outward faces.
+    for (let t = 0; t < indices.length; t += 3) {
+      const b = indices[t + 1]!;
+      indices[t + 1] = indices[t + 2]!;
+      indices[t + 2] = b;
+    }
+  }
+  return {
+    positions,
+    indices,
+    colour: solid.colour,
+    ...(solid.source && uniform
+      ? {
+          source: {
+            kind: 'extrude' as const,
+            face: scaleFace(solid.source.face, factor),
+            height: solid.source.height * factor[0],
+          },
+        }
+      : {}),
+  };
+}
+
+/** Signed volume (divergence theorem); positive when triangles face outward. */
+export function signedVolume(positions: Float32Array, indices: Uint32Array): number {
+  let volume = 0;
+  const a = new Vector3(),
+    b = new Vector3(),
+    c = new Vector3();
+  for (let t = 0; t < indices.length; t += 3) {
+    a.fromArray(positions, indices[t]! * 3);
+    b.fromArray(positions, indices[t + 1]! * 3);
+    c.fromArray(positions, indices[t + 2]! * 3);
+    volume += a.dot(new Vector3().crossVectors(b, c)) / 6;
+  }
+  return volume;
+}
+
+/**
+ * Capped extrusion of a face along its normal by `height` (negative = opposite direction).
+ * Outward-facing regardless of outline winding or direction.
+ */
+export function extrudeFace(face: FaceData, height: number): Omit<SolidData, 'colour'> {
+  const tris = triangulate(face);
+  const n = face.polygon.length / 3;
+  const normal = new Vector3(...face.normal).normalize();
+  const positions = new Float32Array(n * 2 * 3);
+  for (let i = 0; i < n; i += 1) {
+    const x = face.polygon[i * 3]!,
+      y = face.polygon[i * 3 + 1]!,
+      z = face.polygon[i * 3 + 2]!;
+    positions.set([x, y, z], i * 3);
+    positions.set(
+      [x + normal.x * height, y + normal.y * height, z + normal.z * height],
+      (n + i) * 3,
+    );
+  }
+  const indices: number[] = [];
+  for (const [a, b, c] of tris) {
+    indices.push(a, c, b); // base cap (faces −normal)
+    indices.push(n + a, n + b, n + c); // top cap (faces +normal)
+  }
+  for (let i = 0; i < n; i += 1) {
+    const j = (i + 1) % n;
+    indices.push(i, j, n + i);
+    indices.push(j, n + j, n + i);
+  }
+  let index = Uint32Array.from(indices);
+  // Winding depends on outline orientation × extrusion direction: make it outward by measurement.
+  if (signedVolume(positions, index) < 0) {
+    const flipped = index.slice();
+    for (let t = 0; t < flipped.length; t += 3) {
+      flipped[t + 1] = index[t + 2]!;
+      flipped[t + 2] = index[t + 1]!;
+    }
+    index = flipped;
+  }
+  return {
+    positions,
+    indices: index,
+    source: {
+      kind: 'extrude',
+      face: { polygon: face.polygon.slice(), normal: [...face.normal] as [number, number, number] },
+      height,
+    },
+  };
+}
+
+/** Capped extrusion of an (x, z) outline lying in the plane y = baseY, along +Y by `height`. */
 export function extrudePolygon(
   polygon: Float32Array,
   baseY: number,
   height: number,
 ): Omit<SolidData, 'colour'> {
   const n = Math.floor(polygon.length / 2);
-  if (n < 3) throw new Error('A polygon needs at least three points.');
-  const contour = Array.from(
-    { length: n },
-    (_, i) => new Vector2(polygon[i * 2], polygon[i * 2 + 1]),
-  );
-  // Ear clipping wants a consistently wound contour; flip if it is clockwise in (x, z).
-  const ccw = ShapeUtils.isClockWise(contour) ? [...contour].reverse() : contour;
-  const faces = ShapeUtils.triangulateShape(ccw, []);
-  const top = baseY + height;
-  const positions = new Float32Array(n * 2 * 3);
-  for (let i = 0; i < n; i += 1) {
-    const p = ccw[i]!;
-    positions.set([p.x, baseY, p.y], i * 3); // bottom ring
-    positions.set([p.x, top, p.y], (n + i) * 3); // top ring
-  }
-  const indices: number[] = [];
-  // In (x, z) with y up, a counter-clockwise contour seen from +Y is clockwise in the
-  // right-handed (x, y, z) sense, so the bottom cap uses the face order as is (normal −Y)
-  // and the top cap is reversed (normal +Y); flip everything if the extrusion is downward.
-  const flip = height < 0;
-  const tri = (a: number, b: number, c: number): void => {
-    if (flip) indices.push(a, c, b);
-    else indices.push(a, b, c);
-  };
-  for (const [a, b, c] of faces) {
-    tri(a!, b!, c!);
-    tri(n + a!, n + c!, n + b!);
-  }
-  for (let i = 0; i < n; i += 1) {
-    const j = (i + 1) % n;
-    // Side quad between bottom i→j and top i→j, outward facing for a CCW (from +Y) contour.
-    tri(i, n + i, j);
-    tri(j, n + i, n + j);
-  }
-  return {
-    positions,
-    indices: Uint32Array.from(indices),
-    source: { kind: 'extrude', polygon: polygon.slice(), baseY, height },
-  };
+  const points = new Float32Array(n * 3);
+  for (let i = 0; i < n; i += 1) points.set([polygon[i * 2]!, baseY, polygon[i * 2 + 1]!], i * 3);
+  return extrudeFace({ polygon: points, normal: [0, 1, 0] }, height);
 }
 
 /**
@@ -125,7 +279,6 @@ export function meshToSplats(solid: SolidData, spacing: number, seed = 1): Splat
     normal.divideScalar(area * 2);
     tangent.copy(ab).normalize();
     bitangent.crossVectors(normal, tangent).normalize();
-    // Quaternion whose x/y axes span the face and z is the normal (scale z is the thin axis).
     const q = quaternionFromBasis(tangent, bitangent, normal);
     const count = Math.max(1, Math.ceil(area / (spacing * spacing)));
     for (let k = 0; k < count; k += 1) {
@@ -153,7 +306,6 @@ export function meshToSplats(solid: SolidData, spacing: number, seed = 1): Splat
 }
 
 function quaternionFromBasis(x: Vector3, y: Vector3, z: Vector3): [number, number, number, number] {
-  // Rotation matrix columns x, y, z → quaternion (Shepperd).
   const m00 = x.x,
     m01 = y.x,
     m02 = z.x;
