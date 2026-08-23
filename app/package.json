@@ -12,6 +12,7 @@
     "format": "prettier --write ."
   },
   "dependencies": {
+    "@huggingface/transformers": "^4.2.0",
     "@sparkjsdev/spark": "2.1.0",
     "three": "0.180.0",
     "tweakpane": "4.0.5"

@@ -106,6 +106,41 @@ grid plane) and **×5** (four more copies in a row). **CROP** shows a box
 gizmo (move/resize); **Keep inside** / **Cut inside** hide everything on the wrong side in every
 visible unlocked layer (`Ctrl+Z` restores). Hidden splats are never exported.
 
+### AI select (`A`)
+
+Click an object and it is selected — the approach of
+[ArtisanGS](https://arxiv.org/abs/2602.10173) (NVIDIA + U Toronto), which segments splats by
+propagating a 2D selection mask into 3D rather than by clustering geometry.
+
+Picking the tool locks the camera, renders the view offscreen and runs it through **SAM**
+(`Xenova/slimsam-77-uniform`, via transformers.js on ONNX Runtime Web — WebGPU where available,
+CPU otherwise). Then: **click** the object, **Alt-click** a region SAM wrongly included, `[` / `]`
+to step through the three masks SAM offers for the same clicks, **Enter** (or **Commit
+selection**) to lift the mask to 3D. The result becomes an ordinary group, so hover, **Split to
+layer**, `.groups` export and project save all work on it unchanged. `Ctrl+Z` undoes it.
+
+Only the first click pays for the image encoder; the embedding is cached for the view, so
+refining with negative clicks is near-instant. Moving the camera invalidates it and re-encodes.
+
+Two controls in the SEGMENT panel decide what "behind" means — the paper's two operators:
+
+- **Depth** — how far behind the front surface a splat may sit and still be taken. This is
+  *depth projection*: click a chair, get the chair. At the slider's top stop the test is off and
+  it becomes *frustum projection*, taking the whole depth column under the mask, wall included.
+- **Grow** — flood-fill hops that repair the silhouette, where a gaussian's centre falls just
+  outside a mask its own footprint plainly covers. Too many hops walk from the chair onto the floor.
+
+The model (tens of MB) is fetched from the Hugging Face CDN on first use and cached by the
+browser; nothing downloads until you pick the tool, and every other tool works offline.
+
+Limits: this is **single-view**. The far side of the chair is not selected, because nothing here
+reasons about geometry the camera cannot see — that is what the paper's multi-view aggregation
+does, and it is not implemented (its two components, Cutie mask tracking and a differentiable
+rasteriser, have no browser equivalent). Occlusion is approximate: `DepthGrid` bins splat
+*centres* at 6 px, so thin or porous surfaces leak. Without WebGPU (Safari, Firefox) inference
+falls back to single-threaded CPU wasm and takes seconds per view — GitHub Pages cannot send
+COOP/COEP, so `SharedArrayBuffer` and ORT's worker threads are unavailable by construction.
+
 Limits: the connectivity bake is a patch segmenter — it cannot split one connected object on
 geometry alone, and the colour constraint over-segments (it splits a shadow from its surface);
 it runs on the main thread (a second or two per 200 k splats). Tints and labels are not shown on

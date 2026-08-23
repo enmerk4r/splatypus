@@ -12,6 +12,7 @@ import { GroupMapError } from './splats/groups';
 import { SketchSettingsStore } from './sketch/settings';
 import { SketchOverlay } from './sketch/SketchOverlay';
 import { SketchTool } from './sketch/SketchTool';
+import { AiSelectTool } from './select/AiSelectTool';
 import { MeasureTool } from './sketch/MeasureTool';
 import { PolylineTool } from './mesh/PolylineTool';
 import { createExportDialog } from './ui/exportDialog';
@@ -69,6 +70,9 @@ async function bootstrap(): Promise<void> {
     element<HTMLCanvasElement>('sketch-overlay'),
     viewer.canvasElement,
   );
+  const aiSelectTool = new AiSelectTool(viewer, segmentation, {
+    notify: (message, level) => hud.toast(message, level),
+  });
   const measureTool = new MeasureTool(viewer, {
     overlay: sketchOverlay,
     popover: element<HTMLFormElement>('measure-popover'),
@@ -167,9 +171,15 @@ async function bootstrap(): Promise<void> {
     onAdd: () => addInput.click(),
     notify: (message, level) => hud.toast(message, level),
   });
-  const segmentPanel = createSegmentPanel(viewer, segmentation, element('segment-panel'), {
-    notify: (message, level) => hud.toast(message, level),
-  });
+  const segmentPanel = createSegmentPanel(
+    viewer,
+    segmentation,
+    aiSelectTool,
+    element('segment-panel'),
+    {
+      notify: (message, level) => hud.toast(message, level),
+    },
+  );
   const sketchPanel = createSketchPanel(viewer, sketchSettings, element('sketch-panel'));
   const hoverLabel = createHoverLabel(element('hover-label'), segmentation);
   const toolbar = createToolbar(viewer, segmentation, crop, element('toolbar'), {
@@ -273,6 +283,7 @@ async function bootstrap(): Promise<void> {
       crop.dispose();
       sketchTool.dispose();
       measureTool.dispose();
+      aiSelectTool.dispose();
       polylineTool.dispose();
       sketchOverlay.dispose();
       viewer.dispose();

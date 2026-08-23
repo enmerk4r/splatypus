@@ -49,6 +49,8 @@ const PATHS: Record<string, string> = {
   unlock: 'M3.5 7h9v7h-9zM5.5 7V5a2.5 2.5 0 0 1 4.8-1M8 10v1.5',
   layers: 'M8 2 14 5.5 8 9 2 5.5ZM2 8.5l6 3.5 6-3.5M2 11.5 8 15l6-3.5',
   segment: 'M2 2h5v5H2zM9 2h5v5H9zM2 9h5v5H2zM9 9h5v5H9z',
+  aiselect:
+    'M3 2v9l2.3-2.3 1.7 3.6 1.8-.9-1.7-3.5H10zM12.2 1.6l.6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6z',
   chevron: 'M4 6l4 4 4-4',
   // Brushes
   recolor: 'M3 13.5 1.5 12l4-4M9.5 3.5 12.5 6.5 6 13H3v-3zM11 2l3 3',

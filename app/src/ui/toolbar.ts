@@ -52,6 +52,7 @@ export function createToolbar(
     </div>
     <div class="toolbar-rule"></div>
     <div class="toolbar-group">
+      ${button('data-tool', 'aiselect', 'AI select (A)', 'click an object; SAM proposes a mask, Alt-click removes a region, Enter commits')}
       ${button('data-op', 'split', 'Split to layer', 'lift the selected group out of its layer')}
     </div>
     <div class="toolbar-rule"></div>
@@ -237,6 +238,7 @@ export function createToolbar(
       inflate: 'inflate',
       measure: 'measure',
       polyline: 'polyline',
+      aiselect: 'aiselect',
     };
     for (const toolButton of toolButtons)
       toolButton.setAttribute(
@@ -458,6 +460,7 @@ export function createToolbar(
     inflate: 'inflate',
     measure: 'measure',
     polyline: 'polyline',
+    aiselect: 'aiselect',
   };
   for (const toolButton of toolButtons)
     toolButton.addEventListener('click', () => {

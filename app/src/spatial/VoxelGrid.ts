@@ -118,6 +118,44 @@ export class VoxelGrid {
     return best;
   }
 
+  /**
+   * Visits every splat whose centre lies within `radius` of the point, in no particular
+   * order. Unlike `nearest` this cannot stop early, so it walks the whole cell cube once —
+   * keep the radius to a few cells (a flood fill's step, not a whole-scene query).
+   */
+  forEachInRadius(
+    x: number,
+    y: number,
+    z: number,
+    radius: number,
+    visit: (index: number) => void,
+  ): void {
+    const shells = Math.ceil(radius / this.cellSize);
+    const cx = Math.floor(x / this.cellSize);
+    const cy = Math.floor(y / this.cellSize);
+    const cz = Math.floor(z / this.cellSize);
+    const radiusSq = radius * radius;
+
+    for (let dx = -shells; dx <= shells; dx += 1) {
+      for (let dy = -shells; dy <= shells; dy += 1) {
+        for (let dz = -shells; dz <= shells; dz += 1) {
+          const slot = this.slotOfCell.get(this.cellKey(cx + dx, cy + dy, cz + dz));
+          if (slot === undefined) continue;
+          const end = this.starts[slot + 1]!;
+          for (let at = this.starts[slot]!; at < end; at += 1) {
+            const index = this.items[at]!;
+            const ex = this.centres[index * 3]! - x;
+            const ey = this.centres[index * 3 + 1]! - y;
+            const ez = this.centres[index * 3 + 2]! - z;
+            // The cell key hashes, so a collision can put a distant splat in this bucket;
+            // the distance check is what makes the result exact.
+            if (ex * ex + ey * ey + ez * ez <= radiusSq) visit(index);
+          }
+        }
+      }
+    }
+  }
+
   private cellKeyOf(x: number, y: number, z: number): number {
     return this.cellKey(
       Math.floor(x / this.cellSize),

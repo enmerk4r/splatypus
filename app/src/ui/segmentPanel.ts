@@ -1,3 +1,5 @@
+import type { AiSelectTool } from '../select/AiSelectTool';
+import { FRUSTUM_TOLERANCE } from '../select/AiSelectTool';
 import type { BakeBasis, Segmentation } from '../select/Segmentation';
 import type { GroupMap } from '../splats/groups';
 import type { Viewer } from '../viewer/Viewer';
@@ -15,6 +17,7 @@ export interface SegmentPanelCallbacks {
 export function createSegmentPanel(
   viewer: Viewer,
   segmentation: Segmentation,
+  ai: AiSelectTool,
   root: HTMLElement,
   callbacks: SegmentPanelCallbacks,
 ): { dispose: () => void } {
@@ -45,6 +48,32 @@ export function createSegmentPanel(
         <button type="button" id="segment-split" class="primary">Split to layer</button>
         <button type="button" id="segment-clear">Clear</button>
       </div>
+      <hr class="segment-divider" />
+      <div class="segment-row segment-ai-head">
+        <span>AI select (A)</span>
+        <span class="segment-ai-state" id="ai-state"></span>
+      </div>
+      <div class="segment-row">
+        <label for="ai-depth">Depth</label>
+        <input type="range" id="ai-depth" min="1" max="100" step="1" value="2" />
+      </div>
+      <div class="segment-row">
+        <label for="ai-grow">Grow</label>
+        <input type="range" id="ai-grow" min="0" max="4" step="1" value="1" />
+      </div>
+      <div class="segment-row" id="ai-candidate-row">
+        <label>Mask</label>
+        <div class="segment-candidate">
+          <button type="button" id="ai-prev" aria-label="Previous mask">&lsaquo;</button>
+          <span id="ai-candidate">–</span>
+          <button type="button" id="ai-next" aria-label="Next mask">&rsaquo;</button>
+        </div>
+      </div>
+      <p class="segment-status" id="ai-status"></p>
+      <div class="segment-actions">
+        <button type="button" id="ai-commit" class="primary">Commit selection</button>
+        <button type="button" id="ai-reset">Clear clicks</button>
+      </div>
     </div>
   `;
   const pick = <T extends HTMLElement>(id: string): T => root.querySelector<T>(`#${id}`)!;
@@ -56,6 +85,15 @@ export function createSegmentPanel(
   const status = pick<HTMLParagraphElement>('segment-status');
   const split = pick<HTMLButtonElement>('segment-split');
   const clear = pick<HTMLButtonElement>('segment-clear');
+  const aiState = pick<HTMLSpanElement>('ai-state');
+  const aiDepth = pick<HTMLInputElement>('ai-depth');
+  const aiGrow = pick<HTMLInputElement>('ai-grow');
+  const aiCandidate = pick<HTMLSpanElement>('ai-candidate');
+  const aiPrev = pick<HTMLButtonElement>('ai-prev');
+  const aiNext = pick<HTMLButtonElement>('ai-next');
+  const aiStatus = pick<HTMLParagraphElement>('ai-status');
+  const aiCommit = pick<HTMLButtonElement>('ai-commit');
+  const aiReset = pick<HTMLButtonElement>('ai-reset');
 
   const summarise = (groups: GroupMap): string => {
     const covered = Math.round(groups.coverage * 100);
@@ -97,6 +135,53 @@ export function createSegmentPanel(
     } else {
       status.textContent = 'Select a layer to segment it.';
     }
+    renderAi();
+  };
+
+  /** The depth slider is logarithmic: 1 % of the layer radius up to "no occlusion test". */
+  const depthFromSlider = (value: number): number =>
+    value >= 100 ? FRUSTUM_TOLERANCE : 0.002 * Math.pow(1.05, value);
+
+  const renderAi = (): void => {
+    const active = viewer.tool === 'aiselect';
+    const state = ai.session.state;
+    aiState.textContent =
+      state === 'loading'
+        ? 'loading model…'
+        : state === 'encoding'
+          ? 'reading the view…'
+          : state === 'error'
+            ? 'unavailable'
+            : state === 'ready'
+              ? `ready (${ai.session.backend === 'webgpu' ? 'WebGPU' : 'CPU — slow'})`
+              : 'not loaded';
+    aiState.classList.toggle('is-error', state === 'error');
+
+    const count = ai.candidateCount;
+    aiCandidate.textContent = count ? `${ai.candidateIndex + 1} / ${count}` : '–';
+    aiPrev.disabled = count < 2;
+    aiNext.disabled = count < 2;
+    aiDepth.disabled = !active;
+    aiGrow.disabled = !active;
+    aiCommit.disabled = !ai.hasProposal || ai.busy;
+    aiReset.disabled = ai.promptPoints.length === 0;
+
+    const positives = ai.promptPoints.filter((point) => point.positive).length;
+    const negatives = ai.promptPoints.length - positives;
+    const tolerance = depthFromSlider(Number(aiDepth.value));
+    aiStatus.textContent = !active
+      ? 'Press A, or pick the tool, to select an object by clicking it.'
+      : ai.busy
+        ? 'Working…'
+        : state === 'error'
+          ? (ai.session.error ?? 'The model could not be loaded.')
+          : ai.promptPoints.length === 0
+            ? 'Click the object. Alt-click to remove a region.'
+            : `${positives} positive, ${negatives} negative · ${
+                tolerance >= FRUSTUM_TOLERANCE
+                  ? 'frustum projection (takes what is behind it too)'
+                  : 'depth projection'
+              } · Enter to commit`;
   };
 
   const onRebake = (): void => {
@@ -131,6 +216,22 @@ export function createSegmentPanel(
     }
   };
   const onClear = (): void => segmentation.select(undefined);
+  const onAiSettings = (): void => {
+    ai.setSettings({
+      depthTolerance: depthFromSlider(Number(aiDepth.value)),
+      growSteps: Number(aiGrow.value),
+    });
+  };
+  const onAiCommit = (): void => {
+    try {
+      ai.commit();
+    } catch (error) {
+      callbacks.notify(
+        error instanceof Error ? error.message : 'Could not commit the selection.',
+        'error',
+      );
+    }
+  };
 
   let observed = viewer.document;
   const observe = (): void => {
@@ -153,6 +254,15 @@ export function createSegmentPanel(
   blend.addEventListener('input', onBlend);
   split.addEventListener('click', onSplit);
   clear.addEventListener('click', onClear);
+  viewer.addEventListener('tool-changed', renderAi);
+  ai.addEventListener('changed', renderAi);
+  aiDepth.addEventListener('input', onAiSettings);
+  aiGrow.addEventListener('input', onAiSettings);
+  aiPrev.addEventListener('click', () => ai.cycleCandidate(-1));
+  aiNext.addEventListener('click', () => ai.cycleCandidate(1));
+  aiCommit.addEventListener('click', onAiCommit);
+  aiReset.addEventListener('click', () => ai.clearPrompt());
+  onAiSettings();
   observe();
 
   return {
@@ -164,6 +274,8 @@ export function createSegmentPanel(
       segmentation.removeEventListener('selection-changed', render);
       segmentation.removeEventListener('groups-changed', render);
       segmentation.removeEventListener('overlay-changed', render);
+      viewer.removeEventListener('tool-changed', renderAi);
+      ai.removeEventListener('changed', renderAi);
       shell.dispose();
     },
   };
