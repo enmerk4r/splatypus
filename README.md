@@ -207,9 +207,12 @@ costs nothing and the detail stays legible); both revert the moment the layer is
 
 ## Export
 
-Use **EXPORT** in the HUD or `Ctrl/Cmd+E`. Choose **Export Project** to write an editable `.splatypus` project containing the layer stack, transforms, visibility and lock state, live/deleted splats, segmentation groups, sketch strokes, selection, and camera/view state. Opening that file restores the editing workspace; undo/redo history starts empty.
+Use **EXPORT** in the HUD or `Ctrl/Cmd+E`. The dialog offers two clearly separate choices:
 
-Choose **Export** when you need a standard interoperable PLY file. The dialog can include hidden layers and spherical harmonics. PLY output is binary little-endian standard 3DGS PLY and includes only live splats, so it intentionally flattens the editable project structure. Chrome uses the File System Access API when available; Firefox and Safari use a local download fallback.
+- **PLY** (`.ply`, standard 3D Gaussian Splat) — for other viewers and tools. All visible layers are merged into one splat cloud and meshes are converted to splats; hidden splats, layer structure and edit history are not kept. Options: include hidden layers, include spherical harmonics; the estimated size updates live.
+- **Splatypus project** (`.splatypus`, editable) — keeps everything editable: the layer stack, meshes as meshes, transforms, visibility and lock state, live/deleted splats, segmentation groups, sketch strokes, selection, and camera/view state. Opening that file restores the editing workspace; undo/redo history starts empty. Only Splatypus reads it.
+
+Choose **PLY** when you need a standard interoperable file. The dialog can include hidden layers and spherical harmonics. PLY output is binary little-endian standard 3DGS PLY and includes only live splats, so it intentionally flattens the editable project structure. Chrome uses the File System Access API when available; Firefox and Safari use a local download fallback.
 
 ## Coordinate convention
 
