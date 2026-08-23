@@ -54,6 +54,8 @@ Quality checks run with `npm run lint` and `npm test`.
 | `Ctrl/Cmd+E`                       | Export a standard 3DGS PLY                                                           |
 | Click                              | Select the layer under the cursor — and its group, when the layer is segmented       |
 | `1` / `3` / `7`                    | Front/right/top view                                                                 |
+| `J`                                | AI select (orbit mode)                                                               |
+| `K`                                | Toggle the work plane and its gizmo                                                  |
 
 Shift-drop adds a single file to the current document. Dropping multiple files always adds each as a layer. An ordinary single-file drop or **Open** replaces the scene after an unsaved-changes guard.
 
@@ -63,7 +65,7 @@ Choose **Brush ▸ Sketch** in the bottom toolbar (the Brush button opens a flyo
 
 - **Surface** follows scan hits, bridges small gaps at the last depth, and biases the stroke slightly toward the camera so it remains visible on the scan.
 - **Lock depth** fixes a camera-facing plane at the first hit, which is useful for drawing Tube strokes in empty space.
-- **Plane** draws on the world ground plane (`y = 0`).
+- **Plane** draws on the **work plane** when one is shown (`K`, or Tools ▸ Work plane), else the world ground plane (`y = 0`).
 
 **Ink** is a camera-facing ribbon, **Tube** is round and view-independent, **Marker** is wide and translucent, and **Spray** creates deterministic scattered blobs. Mouse input uses full pressure; a pen changes width and opacity when **Pressure** is enabled. Right-drag, middle-drag, or `Alt`+left-drag keeps the camera available while drawing.
 
@@ -157,7 +159,7 @@ grid plane) and **×5** (four more copies in a row). **CROP** shows a box
 gizmo (move/resize); **Keep inside** / **Cut inside** hide everything on the wrong side in every
 visible unlocked layer (`Ctrl+Z` restores). Hidden splats are never exported.
 
-### AI select (`A`)
+### AI select (`J`)
 
 Click an object and it is selected — the approach of
 [ArtisanGS](https://arxiv.org/abs/2602.10173) (NVIDIA + U Toronto), which segments splats by
@@ -169,6 +171,10 @@ CPU otherwise). Then: **click** the object, **Alt-click** a region SAM wrongly i
 to step through the three masks SAM offers for the same clicks, **Enter** (or **Commit
 selection**) to lift the mask to 3D. The result becomes an ordinary group, so hover, **Split to
 layer**, `.groups` export and project save all work on it unchanged. `Ctrl+Z` undoes it.
+Picking the tool starts the encode on its own, and once a selection is made **CLIP**
+(`Xenova/clip-vit-base-patch32`) names it from a curated room-object vocabulary — "Chair",
+"Monitor" — in the background; uncertain guesses keep the plain "AI selection n" name, and
+**Name objects** in the SEGMENT panel turns it off.
 
 Only the first click pays for the image encoder; the embedding is cached for the view, so
 refining with negative clicks is near-instant. Moving the camera invalidates it and re-encodes.
@@ -235,7 +241,9 @@ Press `P` and pick a shape in the **MODEL** panel — freeform **polyline** (Ent
 a click on the first point closes it, Backspace removes a point), **rectangle** (two corners),
 regular **polygon** (centre + radius, 3–24 sides) or **circle** (centre + radius). Outlines are
 drawn on a horizontal plane whose height comes from the surface under the first click, else the
-grid; segment lengths are shown live. Rhino-style numeric entry: once the first point is down,
+grid — or, when the **work plane** is shown (`K` / Tools ▸ Work plane: move or rotate it with its
+gizmo, snap it to Ground/Front/Side or square it to the camera), on that plane, so you can draw
+straight onto a wall or a sloped roof; segment lengths are shown live. Rhino-style numeric entry: once the first point is down,
 type a dimension (e.g. `2.25`) and the next click only sets the direction — segment length for a
 polyline, radius for a circle/polygon, width `Enter` depth (or `2,1.5`) for a rectangle; Enter
 accepts it, Backspace edits it, Escape clears it. **Ortho** mode keeps polyline segments
