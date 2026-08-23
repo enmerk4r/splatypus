@@ -192,7 +192,7 @@ export function createSegmentPanel(
     const negatives = ai.promptPoints.length - positives;
     const tolerance = depthFromSlider(Number(aiDepth.value));
     aiStatus.textContent = !active
-      ? 'Press A, or pick the tool, to select an object by clicking it.'
+      ? 'Press J, or pick the tool, to select an object by clicking it.'
       : ai.busy
         ? ai.progress || 'Working…'
         : state === 'error'
