@@ -22,6 +22,7 @@ import type { AxisView, CameraMode } from './CameraRig';
 import { LayerGizmo } from './LayerGizmo';
 import type { TransformMode } from './LayerGizmo';
 import { GridFloor } from './GridFloor';
+import { WorkPlane } from './WorkPlane';
 import { CanvasInteraction } from './CanvasInteraction';
 import { setLineResolution } from './highlight';
 
@@ -56,6 +57,7 @@ export class Viewer extends EventTarget {
   private readonly cameraValue = new PerspectiveCamera(60, 1, 0.01, 1000);
   private readonly gizmo: LayerGizmo;
   private readonly grid: GridFloor;
+  private readonly workPlaneValue: WorkPlane;
   private readonly interactions: CanvasInteraction;
   private readonly onFrame: (now: number) => void;
   private documentValue?: Document;
@@ -102,6 +104,10 @@ export class Viewer extends EventTarget {
     };
     this.grid = new GridFloor(this.scene);
     this.grid.reset(new Vector3(), 1, 0);
+    this.workPlaneValue = new WorkPlane(this.scene, this.cameraValue, canvas, this.cameraRig);
+    this.workPlaneValue.resize(1);
+    // A gizmo drag must not also register as a canvas click on whatever is behind it.
+    this.addInteractionGuard(() => this.workPlaneValue.isInteracting);
     this.interactions = new CanvasInteraction(this, () => this.interacting);
 
     this.onFrame = (now): void => {
@@ -119,6 +125,11 @@ export class Viewer extends EventTarget {
     this.cameraValue.position.set(2, 1.2, 2);
     this.cameraValue.lookAt(0, 0, 0);
     this.renderer.setAnimationLoop(this.onFrame);
+  }
+
+  /** The movable construction plane sketching tools snap to when it is enabled. */
+  get workPlane(): WorkPlane {
+    return this.workPlaneValue;
   }
 
   get isGridVisible(): boolean {
@@ -156,7 +167,7 @@ export class Viewer extends EventTarget {
     controls.mouseButtons.LEFT = tool === 'select' ? MOUSE.ROTATE : null;
     controls.mouseButtons.MIDDLE = MOUSE.DOLLY;
     controls.mouseButtons.RIGHT = tool === 'select' ? MOUSE.PAN : MOUSE.ROTATE;
-    this.gizmo.setEnabled(tool === 'select');
+    this.gizmo.setEnabled(tool === 'select' && !this.workPlaneValue.editing);
     this.canvas.classList.toggle('tool-crosshair', tool !== 'select');
     this.interactions.clearHover();
     this.dispatchEvent(new Event('tool-changed'));
@@ -322,6 +333,7 @@ export class Viewer extends EventTarget {
   }
 
   dispose(): void {
+    this.workPlaneValue.dispose();
     this.renderer.setAnimationLoop(null);
     this.clearDocument();
     this.gizmo.dispose();
@@ -378,7 +390,11 @@ export class Viewer extends EventTarget {
 
   // Only structural changes (add/merge/delete) can change the scene extent; moving a layer never moves the grid.
   private readonly onLayersChanged = (): void => {
-    if (this.documentValue) this.fitGrid(this.documentValue.getRobustBounds().radius);
+    if (this.documentValue) {
+      const radius = this.documentValue.getRobustBounds().radius;
+      this.fitGrid(radius);
+      this.workPlaneValue.resize(radius);
+    }
     this.syncSelectionCues();
   };
 

@@ -403,7 +403,8 @@
 
 .scale-popover,
 .array-popover,
-.crop-popover {
+.crop-popover,
+.plane-popover {
   position: absolute;
   bottom: calc(100% + 10px);
   z-index: 2;
@@ -422,7 +423,8 @@
 
 .scale-popover::after,
 .array-popover::after,
-.crop-popover::after {
+.crop-popover::after,
+.plane-popover::after {
   position: absolute;
   top: 100%;
   left: 50%;
@@ -494,7 +496,8 @@
   font-weight: 700;
 }
 
-.toolbar .crop-popover button {
+.toolbar .crop-popover button,
+.toolbar .plane-popover button {
   width: 30px;
   height: 30px;
 }

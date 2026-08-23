@@ -81,6 +81,7 @@ export function createToolbar(
     <div class="toolbar-rule"></div>
     <div class="toolbar-group" role="group" aria-label="Modelling">
       ${button('data-tool', 'polyline', 'Polyline → extrude (P)', 'click an outline on a plane, double-click or Enter to close, type a height: a capped mesh layer')}
+      ${button('data-op', 'plane', 'Work plane (K)', 'place the plane that sketching and polylines draw on')}
     </div>
     <div class="toolbar-rule"></div>
     <div class="toolbar-group">
@@ -112,6 +113,17 @@ export function createToolbar(
           `<button type="button" data-selection-tool="${mode}" role="menuitem" aria-label="${label}" title="${label} — ${hint}">${icon(mode === 'pointer' ? 'select' : mode)}</button>`,
       ).join('')}
     </div>
+    <div class="plane-popover" role="menu" aria-label="Work plane controls" hidden>
+      ${button('data-plane', 'workplane', 'Show work plane', 'draw on a plane you place yourself')}
+      ${button('data-plane', 'planeMove', 'Move plane', 'drag the plane along its axes')}
+      ${button('data-plane', 'planeRotate', 'Rotate plane', 'tilt the plane')}
+      <span class="toolbar-rule"></span>
+      ${button('data-plane', 'planeGround', 'Ground (XZ)', 'lay the plane flat')}
+      ${button('data-plane', 'planeFront', 'Front (XY)', 'stand the plane up, facing front')}
+      ${button('data-plane', 'planeSide', 'Side (YZ)', 'stand the plane up, facing side')}
+      ${button('data-plane', 'planeView', 'Face view', 'square the plane to the camera')}
+      ${button('data-plane', 'planeReset', 'Reset plane', 'back to the horizontal plane through the origin')}
+    </div>
     <div class="crop-popover" role="menu" aria-label="Crop controls" hidden>
       ${button('data-crop', 'crop', 'Show crop box', 'toggle the crop box')}
       ${button('data-crop', 'translate', 'Move crop box', 'move the crop box')}
@@ -134,6 +146,13 @@ export function createToolbar(
   const arrayInputs = [...arrayPopover.querySelectorAll<HTMLInputElement>('input')];
   const arrayApply = arrayPopover.querySelector<HTMLButtonElement>('button')!;
   const cropButton = op('crop');
+  const planeButton = op('plane');
+  const planePopover = host.querySelector<HTMLElement>('.plane-popover')!;
+  const planeItem = (name: string): HTMLButtonElement =>
+    planePopover.querySelector<HTMLButtonElement>(`[data-plane="${name}"]`)!;
+  const planeShow = planeItem('workplane');
+  const planeMove = planeItem('planeMove');
+  const planeRotate = planeItem('planeRotate');
   const cropPopover = host.querySelector<HTMLElement>('.crop-popover')!;
   const cropToggle = cropPopover.querySelector<HTMLButtonElement>('[data-crop="crop"]')!;
   const cropMove = cropPopover.querySelector<HTMLButtonElement>('[data-crop="translate"]')!;
@@ -166,6 +185,15 @@ export function createToolbar(
     const hostRect = host.getBoundingClientRect();
     const buttonRect = arrayButton.getBoundingClientRect();
     arrayPopover.style.left = `${buttonRect.left - hostRect.left + buttonRect.width / 2}px`;
+  };
+
+  const setPlanePopover = (visible: boolean): void => {
+    planePopover.hidden = !visible;
+    planeButton.setAttribute('aria-expanded', String(visible));
+    if (!visible) return;
+    const hostRect = host.getBoundingClientRect();
+    const buttonRect = planeButton.getBoundingClientRect();
+    planePopover.style.left = `${buttonRect.left - hostRect.left + buttonRect.width / 2}px`;
   };
 
   const setCropPopover = (visible: boolean): void => {
@@ -266,6 +294,20 @@ export function createToolbar(
       );
     if (scaleButton.disabled || viewer.transformMode !== 'scale') setScalePopover(false);
     if (arrayButton.disabled) setArrayPopover(false);
+    planeButton.setAttribute('aria-pressed', String(viewer.workPlane.enabled));
+    planeShow.setAttribute('aria-pressed', String(viewer.workPlane.enabled));
+    planeShow.setAttribute(
+      'aria-label',
+      viewer.workPlane.enabled ? 'Hide work plane' : 'Show work plane',
+    );
+    planeMove.setAttribute(
+      'aria-pressed',
+      String(viewer.workPlane.editing && viewer.workPlane.mode === 'translate'),
+    );
+    planeRotate.setAttribute(
+      'aria-pressed',
+      String(viewer.workPlane.editing && viewer.workPlane.mode === 'rotate'),
+    );
     cropButton.setAttribute('aria-pressed', String(crop.isActive));
     cropToggle.setAttribute('aria-pressed', String(crop.isActive));
     cropToggle.setAttribute('aria-label', crop.isActive ? 'Hide crop box' : 'Show crop box');
@@ -320,6 +362,41 @@ export function createToolbar(
     setCropPopover(false);
     if (!arrayPopover.hidden) arrayInputs[0]?.focus();
   });
+  const workPlane = viewer.workPlane;
+  const onPlaneButton = (): void => {
+    setPlanePopover(planePopover.hidden);
+    setScalePopover(false);
+    setArrayPopover(false);
+    setSelectionPopover(false);
+    setCropPopover(false);
+  };
+  const onPlaneShow = (): void => {
+    const next = !workPlane.enabled;
+    workPlane.setEnabled(next);
+    // Showing it is almost always followed by placing it, so bring the gizmo up too.
+    workPlane.setEditing(next);
+  };
+  const onPlaneMove = (): void => {
+    workPlane.setEditing(true);
+    workPlane.setMode('translate');
+  };
+  const onPlaneRotate = (): void => {
+    workPlane.setEditing(true);
+    workPlane.setMode('rotate');
+  };
+  const usePlane = (run: () => void) => (): void => {
+    if (!workPlane.enabled) {
+      workPlane.setEnabled(true);
+      workPlane.setEditing(true);
+    }
+    run();
+  };
+  const onPlaneGround = usePlane(() => workPlane.setPreset('ground'));
+  const onPlaneFront = usePlane(() => workPlane.setPreset('front'));
+  const onPlaneSide = usePlane(() => workPlane.setPreset('side'));
+  const onPlaneView = usePlane(() => workPlane.alignToView(viewer.camera));
+  const onPlaneReset = usePlane(() => workPlane.reset());
+
   const onCropButton = (): void => {
     setCropPopover(cropPopover.hidden);
     setScalePopover(false);
@@ -336,6 +413,16 @@ export function createToolbar(
   };
   const onCropKeep = runCrop('inside');
   const onCropCut = runCrop('outside');
+  planeButton.addEventListener('click', onPlaneButton);
+  planeShow.addEventListener('click', onPlaneShow);
+  planeMove.addEventListener('click', onPlaneMove);
+  planeRotate.addEventListener('click', onPlaneRotate);
+  planeItem('planeGround').addEventListener('click', onPlaneGround);
+  planeItem('planeFront').addEventListener('click', onPlaneFront);
+  planeItem('planeSide').addEventListener('click', onPlaneSide);
+  planeItem('planeView').addEventListener('click', onPlaneView);
+  planeItem('planeReset').addEventListener('click', onPlaneReset);
+  workPlane.addEventListener('changed', render);
   cropButton.addEventListener('click', onCropButton);
   cropToggle.addEventListener('click', onCropToggle);
   cropMove.addEventListener('click', onCropMove);
@@ -456,6 +543,8 @@ export function createToolbar(
       setArrayPopover(false);
     if (!cropPopover.hidden && !cropPopover.contains(target) && !cropButton.contains(target))
       setCropPopover(false);
+    if (!planePopover.hidden && !planePopover.contains(target) && !planeButton.contains(target))
+      setPlanePopover(false);
     if (
       !selectionPopover.hidden &&
       !selectionPopover.contains(target) &&
@@ -532,6 +621,7 @@ export function createToolbar(
       scaleInput.removeEventListener('keydown', onScaleKeyDown);
       arrayApply.removeEventListener('click', applyArray);
       for (const input of arrayInputs) input.removeEventListener('keydown', onArrayKeyDown);
+      viewer.workPlane.removeEventListener('changed', render);
       document.removeEventListener('pointerdown', onOutsideScale);
       cropButton.removeEventListener('click', onCropButton);
       cropToggle.removeEventListener('click', onCropToggle);

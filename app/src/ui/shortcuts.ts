@@ -91,6 +91,15 @@ export function wireShortcuts(viewer: Viewer, actions: ShortcutActions): () => v
       case 'KeyA':
         if (viewer.cameraRig.mode === 'orbit') viewer.setTool('aiselect');
         break;
+      case 'KeyK': {
+        // Toggle the work plane; showing it also brings its gizmo up, since placing it is
+        // the only reason to show it.
+        const plane = viewer.workPlane;
+        const next = !plane.enabled;
+        plane.setEnabled(next);
+        plane.setEditing(next);
+        break;
+      }
       case 'BracketLeft':
       case 'BracketRight': {
         // The AI selection tool owns the brackets while it is active: they step through
