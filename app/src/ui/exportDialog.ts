@@ -40,8 +40,15 @@ export function createExportDialog(
   const estimate = dialog.querySelector<HTMLElement>('#export-estimate')!;
   const progress = dialog.querySelector<HTMLProgressElement>('#export-progress')!;
   const submit = dialog.querySelector<HTMLButtonElement>('#export-submit')!;
-  const saveProject = dialog.querySelector<HTMLButtonElement>('#project-save')!;
   const cancel = dialog.querySelector<HTMLButtonElement>('#export-cancel')!;
+  const formats = [...dialog.querySelectorAll<HTMLInputElement>('input[name="export-format"]')];
+  const format = (): 'ply' | 'project' =>
+    formats.find((input) => input.checked)?.value === 'project' ? 'project' : 'ply';
+  const busy = (value: boolean): void => {
+    submit.disabled = value;
+    cancel.disabled = value;
+    formats.forEach((input) => (input.disabled = value));
+  };
 
   const layersForEstimate = (document: Document) =>
     document.layers.map((layer) => {
@@ -61,6 +68,7 @@ export function createExportDialog(
     sh.disabled = !hasSh;
     if (!hasSh) sh.checked = false;
     estimate.textContent = `Estimated size · ${formatBytes(estimateGaussianPlyBytes(layersForEstimate(document), { includeHidden: hidden.checked, includeSh: sh.checked }))}`;
+    submit.textContent = format() === 'project' ? 'Save project' : 'Export PLY';
   };
   const open = (): void => {
     const document = getDocument();
@@ -70,6 +78,7 @@ export function createExportDialog(
     }
     hidden.checked = false;
     sh.checked = document.layers.some((layer) => layer.store.shDegree > 0);
+    formats.forEach((input) => (input.checked = input.value === 'ply'));
     progress.hidden = true;
     progress.value = 0;
     refresh();
@@ -77,10 +86,13 @@ export function createExportDialog(
   };
   const onSubmit = (event: SubmitEvent): void => {
     event.preventDefault();
+    if (format() === 'project') {
+      onSaveProject();
+      return;
+    }
     const document = getDocument();
     if (!document) return;
-    submit.disabled = true;
-    cancel.disabled = true;
+    busy(true);
     progress.hidden = false;
     progress.removeAttribute('value');
     const name = exportName(document);
@@ -104,10 +116,7 @@ export function createExportDialog(
         console.error(error);
         toast(`Export failed: ${error instanceof Error ? error.message : String(error)}`, 'error');
       })
-      .finally(() => {
-        submit.disabled = false;
-        cancel.disabled = false;
-      });
+      .finally(() => busy(false));
   };
   const close = (): void => dialog.close();
   const onSaveProject = (): void => {
@@ -119,9 +128,7 @@ export function createExportDialog(
       mimeType: 'application/x-splatypus',
       extensions: ['.splatypus'],
     });
-    submit.disabled = true;
-    saveProject.disabled = true;
-    cancel.disabled = true;
+    busy(true);
     let buffer: ArrayBuffer;
     try {
       buffer = writeProject(document, getProjectViewState());
@@ -131,9 +138,7 @@ export function createExportDialog(
         `Project save failed: ${error instanceof Error ? error.message : String(error)}`,
         'error',
       );
-      submit.disabled = false;
-      saveProject.disabled = false;
-      cancel.disabled = false;
+      busy(false);
       return;
     }
     void destination
@@ -150,27 +155,23 @@ export function createExportDialog(
           'error',
         );
       })
-      .finally(() => {
-        submit.disabled = false;
-        saveProject.disabled = false;
-        cancel.disabled = false;
-      });
+      .finally(() => busy(false));
   };
   button.addEventListener('click', open);
   form.addEventListener('submit', onSubmit);
   cancel.addEventListener('click', close);
-  saveProject.addEventListener('click', onSaveProject);
   hidden.addEventListener('change', refresh);
   sh.addEventListener('change', refresh);
+  formats.forEach((input) => input.addEventListener('change', refresh));
   return {
     open,
     dispose: () => {
       button.removeEventListener('click', open);
       form.removeEventListener('submit', onSubmit);
       cancel.removeEventListener('click', close);
-      saveProject.removeEventListener('click', onSaveProject);
       hidden.removeEventListener('change', refresh);
       sh.removeEventListener('change', refresh);
+      formats.forEach((input) => input.removeEventListener('change', refresh));
     },
   };
 }

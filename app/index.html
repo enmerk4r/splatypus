@@ -53,37 +53,40 @@
         accept=".ply,.spz,.splat,.ksplat,.sog,.groups"
       />
 
-      <aside id="hud" class="hud" aria-live="polite">
-        <a class="brand" href="./" aria-label="Back to Splatypus home">
-          <img class="brand-mark" src="./logo.svg" alt="" /><span>SPLATYPUS</span>
-        </a>
-        <dl>
-          <div>
-            <dt>FPS</dt>
-            <dd id="hud-fps">—</dd>
+      <div class="left-rail">
+        <aside id="hud" class="hud" aria-live="polite">
+          <a class="brand" href="./" aria-label="Back to Splatypus home">
+            <img class="brand-mark" src="./logo.svg" alt="" /><span>SPLATYPUS</span>
+          </a>
+          <dl>
+            <div>
+              <dt>FPS</dt>
+              <dd id="hud-fps">—</dd>
+            </div>
+            <div>
+              <dt>SPLATS</dt>
+              <dd id="hud-count">—</dd>
+            </div>
+            <div>
+              <dt>FILE</dt>
+              <dd id="hud-file">No scene</dd>
+            </div>
+            <div>
+              <dt>STATUS</dt>
+              <dd id="hud-status">Ready</dd>
+            </div>
+            <div>
+              <dt>GPU</dt>
+              <dd id="hud-gpu">—</dd>
+            </div>
+          </dl>
+          <div id="progress-track" class="progress-track" hidden>
+            <div id="progress-bar" class="progress-bar"></div>
           </div>
-          <div>
-            <dt>SPLATS</dt>
-            <dd id="hud-count">—</dd>
-          </div>
-          <div>
-            <dt>FILE</dt>
-            <dd id="hud-file">No scene</dd>
-          </div>
-          <div>
-            <dt>STATUS</dt>
-            <dd id="hud-status">Ready</dd>
-          </div>
-          <div>
-            <dt>GPU</dt>
-            <dd id="hud-gpu">—</dd>
-          </div>
-        </dl>
-        <div id="progress-track" class="progress-track" hidden>
-          <div id="progress-bar" class="progress-bar"></div>
-        </div>
-        <button id="export-file" class="hud-export" type="button">EXPORT</button>
-      </aside>
+          <button id="export-file" class="hud-export" type="button">EXPORT</button>
+        </aside>
+        <div id="toast-region" class="toast-region" aria-live="assertive"></div>
+      </div>
 
       <div class="right-rail">
         <div id="panel" class="panel-host"></div>
@@ -108,7 +111,8 @@
           hidden
         ></aside>
       </div>
-      <div id="toolbar" class="toolbar" aria-label="Object tools" hidden></div>
+      <div id="toolbar" class="toolbar" aria-label="Tools and actions" hidden></div>
+      <div id="camera-bar" class="toolbar-bar camera-bar" aria-label="Camera" hidden></div>
       <div id="hover-label" class="hover-label" hidden></div>
       <form id="measure-popover" class="measure-popover" aria-label="Scale to reference" hidden>
         <label
@@ -127,24 +131,52 @@
       <div id="drag-overlay" class="drag-overlay" hidden>
         <div><strong>Drop to open</strong><span>The current scene will be replaced</span></div>
       </div>
-      <div id="toast-region" class="toast-region" aria-live="assertive"></div>
-      <div id="fly-hint" class="fly-hint" hidden>FLY · WASD + QE · DRAG TO LOOK · ESC TO EXIT</div>
       <dialog id="export-dialog" class="export-dialog">
         <form method="dialog">
           <header>
             <span>EXPORT</span>
-            <strong>PLY OR EDITABLE PROJECT</strong>
+            <strong>WHAT DO YOU WANT TO SAVE?</strong>
           </header>
-          <label><input id="export-hidden" type="checkbox" /> Include hidden layers</label>
-          <label
-            ><input id="export-sh" type="checkbox" checked /> Include spherical harmonics</label
-          >
-          <p id="export-estimate">Estimated size · —</p>
+          <div class="export-choices" role="radiogroup" aria-label="Export format">
+            <label class="export-choice">
+              <input type="radio" name="export-format" value="ply" checked />
+              <span class="export-choice-body">
+                <span class="export-choice-title"
+                  >PLY <em>.ply · standard 3D Gaussian Splat</em></span
+                >
+                <span class="export-choice-text"
+                  >For other viewers and tools. All visible layers are <strong>merged</strong> into
+                  one splat cloud and <strong>meshes are converted to splats</strong>. Hidden
+                  splats, layer structure and edit history are not kept.</span
+                >
+                <span class="export-choice-options">
+                  <label><input id="export-hidden" type="checkbox" /> Include hidden layers</label>
+                  <label
+                    ><input id="export-sh" type="checkbox" checked /> Include spherical
+                    harmonics</label
+                  >
+                  <span id="export-estimate" class="export-estimate">Estimated size · —</span>
+                </span>
+              </span>
+            </label>
+            <label class="export-choice">
+              <input type="radio" name="export-format" value="project" />
+              <span class="export-choice-body">
+                <span class="export-choice-title"
+                  >Splatypus project <em>.splatypus · editable</em></span
+                >
+                <span class="export-choice-text"
+                  >Keeps <strong>everything editable</strong>: every layer, meshes as meshes,
+                  transforms, hidden splats, groups, sketch strokes, selection and camera. Open it
+                  in Splatypus to continue working. Not readable by other tools.</span
+                >
+              </span>
+            </label>
+          </div>
           <progress id="export-progress" max="1" value="0" hidden></progress>
           <footer>
             <button id="export-cancel" type="button">Cancel</button>
-            <button id="project-save" type="button">Export Project</button>
-            <button id="export-submit" class="primary" type="submit">Export</button>
+            <button id="export-submit" class="primary" type="submit">Export PLY</button>
           </footer>
         </form>
       </dialog>

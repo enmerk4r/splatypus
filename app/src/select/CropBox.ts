@@ -79,6 +79,7 @@ export class CropBox extends EventTarget {
     this.controls = new TransformControls(this.viewer.camera, this.viewer.canvasElement);
     this.controls.setSize(0.7);
     this.controls.addEventListener('dragging-changed', this.onDragging);
+    this.controls.addEventListener('objectChange', this.onObjectChange);
     this.viewer.addHelper(this.controls.getHelper());
     this.controls.attach(this.box);
     this.dispatchEvent(new Event('crop-changed'));
@@ -133,6 +134,7 @@ export class CropBox extends EventTarget {
   readonly cancel = (): void => {
     if (this.controls) {
       this.controls.removeEventListener('dragging-changed', this.onDragging);
+      this.controls.removeEventListener('objectChange', this.onObjectChange);
       this.controls.detach();
       this.viewer.removeHelper(this.controls.getHelper());
       this.controls.dispose();
@@ -156,6 +158,17 @@ export class CropBox extends EventTarget {
     this.viewer.removeEventListener('document-changed', this.cancel);
     this.cancel();
   }
+
+  /** Dragging a scale handle through the centre would flip the box; keep it a positive size. */
+  private readonly onObjectChange = (): void => {
+    const box = this.box;
+    if (!box) return;
+    box.scale.set(
+      Math.max(Math.abs(box.scale.x), 1e-3),
+      Math.max(Math.abs(box.scale.y), 1e-3),
+      Math.max(Math.abs(box.scale.z), 1e-3),
+    );
+  };
 
   private readonly onDragging = (event: { value?: unknown }): void => {
     this.viewer.cameraRig.controls.enabled =

@@ -29,6 +29,7 @@ import { createRegionPanel } from './ui/regionPanel';
 import { createSegmentPanel } from './ui/segmentPanel';
 import { createSketchPanel } from './ui/sketchPanel';
 import { createToolbar } from './ui/toolbar';
+import { createCameraBar } from './ui/cameraBar';
 import { wireShortcuts } from './ui/shortcuts';
 import { Viewer, WebGLUnavailableError } from './viewer/Viewer';
 
@@ -67,7 +68,6 @@ async function bootstrap(): Promise<void> {
   const openInput = element<HTMLInputElement>('file-input');
   const addInput = element<HTMLInputElement>('add-file-input');
   const sampleSelect = element<HTMLSelectElement>('sample-select');
-  const flyHint = element('fly-hint');
   const imports = new AppImports(viewer, hud, emptyState);
   const segmentation = new Segmentation(viewer);
   const regionSettings = new RegionSettingsStore();
@@ -212,9 +212,16 @@ async function bootstrap(): Promise<void> {
   );
   const sketchPanel = createSketchPanel(viewer, sketchSettings, element('sketch-panel'));
   const hoverLabel = createHoverLabel(element('hover-label'), segmentation);
-  const toolbar = createToolbar(viewer, segmentation, crop, regionSettings, element('toolbar'), {
-    notify: (message, level) => hud.toast(message, level),
-  });
+  const toolbar = createToolbar(
+    viewer,
+    segmentation,
+    crop,
+    regionSettings,
+    modelSettings,
+    element('toolbar'),
+    { notify: (message, level) => hud.toast(message, level) },
+  );
+  const cameraBar = createCameraBar(viewer, element('camera-bar'));
   const exportDialog = createExportDialog(
     element<HTMLDialogElement>('export-dialog'),
     element<HTMLButtonElement>('export-file'),
@@ -248,10 +255,6 @@ async function bootstrap(): Promise<void> {
   viewer.addEventListener('document-changed', (event) => {
     hud.setDocument((event as CustomEvent<SplatDocument | undefined>).detail);
   });
-  const updateFlyHint = (): void => {
-    flyHint.hidden = viewer.cameraRig.mode !== 'fly';
-  };
-  viewer.cameraRig.addEventListener('mode-changed', updateFlyHint);
 
   let samples: Sample[] = [];
   try {
@@ -313,6 +316,7 @@ async function bootstrap(): Promise<void> {
       sketchPanel.dispose();
       hoverLabel.dispose();
       toolbar.dispose();
+      cameraBar.dispose();
       exportDialog.dispose();
       segmentation.dispose();
       crop.dispose();

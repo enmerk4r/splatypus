@@ -35,7 +35,7 @@ Quality checks run with `npm run lint` and `npm test`.
 | Scroll                             | Zoom to cursor; in fly mode, change speed                                            |
 | Double-click                       | Move the orbit target to the splat surface                                           |
 | `F`                                | Frame the loaded scene                                                               |
-| `Tab`                              | Toggle orbit/fly mode                                                                |
+| `Tab`                              | Toggle orbit/fly mode (also the first button of the bottom-left camera cluster)      |
 | `W` `A` `S` `D`                    | Move in fly mode                                                                     |
 | `Q` / `E`                          | Move down/up in fly mode                                                             |
 | `Shift`                            | Fly at 4× speed                                                                      |
@@ -59,7 +59,7 @@ Shift-drop adds a single file to the current document. Dropping multiple files a
 
 ## Sketching
 
-Choose **Sketch** in the bottom toolbar or press `S`, then draw with the left button. The **SKETCH** panel controls the preset, colour, world-space size, opacity, pressure response, and placement:
+Choose **Brush ▸ Sketch** in the bottom toolbar (the Brush button opens a flyout of all the paint tools: Sketch, Erase, Recolor, Fade, Grab, Inflate) or press `S`, then draw with the left button. The **SKETCH** panel controls the preset, colour, world-space size, opacity, pressure response, and placement:
 
 - **Surface** follows scan hits, bridges small gaps at the last depth, and biases the stroke slightly toward the camera so it remains visible on the scan.
 - **Lock depth** fixes a camera-facing plane at the first hit, which is useful for drawing Tube strokes in empty space.
@@ -144,8 +144,14 @@ splat count.
 Hover a group to see its name; click to select it (the picker prefers the nearest *assigned*
 splat); **Split to layer** lifts it into its own `segment` layer, re-originned on its centroid
 so the gizmo sits on the object and rotation spins it in place. Splits, crops and all layer
-tools are undoable. The bottom **object toolbar** (icons, hover for labels) holds the per-object
-tools: split, move/rotate/scale, duplicate, array ×5, merge, isolate, snap to floor, delete; the
+tools are undoable. The bottom toolbar (icons, hover for labels) is split in two: **Tools** on
+the left — Select with its Move | Rotate | Scale gumball modes and selection-method flyout,
+Brush (flyout of paint tools), Measure, Model (flyout of outline shapes), Crop — and
+**Actions** on the right — Undo/Redo, Duplicate, Array, Split to layer, Isolate, Snap to floor,
+Delete. A status line above it names the active tool and its keys. The camera cluster in the
+bottom-left corner toggles orbit/fly, frames the scene, jumps to the front/right/top views and
+toggles the grid (the VIEW panel keeps FOV, fly speed and up axis). The right-hand SELECT,
+SKETCH and MODEL panels appear only while their tool is in use; the
 **LAYERS** toolbar mirrors **SOLO** (show only this layer — view state), **FLOOR** (drop onto the
 grid plane) and **×5** (four more copies in a row). **CROP** shows a box
 gizmo (move/resize); **Keep inside** / **Cut inside** hide everything on the wrong side in every
@@ -251,9 +257,12 @@ costs nothing and the detail stays legible); both revert the moment the layer is
 
 ## Export
 
-Use **EXPORT** in the HUD or `Ctrl/Cmd+E`. Choose **Export Project** to write an editable `.splatypus` project containing the layer stack, transforms, visibility and lock state, live/deleted splats, segmentation groups, sketch strokes, selection, and camera/view state. Opening that file restores the editing workspace; undo/redo history starts empty.
+Use **EXPORT** in the HUD or `Ctrl/Cmd+E`. The dialog offers two clearly separate choices:
 
-Choose **Export** when you need a standard interoperable PLY file. The dialog can include hidden layers and spherical harmonics. PLY output is binary little-endian standard 3DGS PLY and includes only live splats, so it intentionally flattens the editable project structure. Chrome uses the File System Access API when available; Firefox and Safari use a local download fallback.
+- **PLY** (`.ply`, standard 3D Gaussian Splat) — for other viewers and tools. All visible layers are merged into one splat cloud and meshes are converted to splats; hidden splats, layer structure and edit history are not kept. Options: include hidden layers, include spherical harmonics; the estimated size updates live.
+- **Splatypus project** (`.splatypus`, editable) — keeps everything editable: the layer stack, meshes as meshes, transforms, visibility and lock state, live/deleted splats, segmentation groups, sketch strokes, selection, and camera/view state. Opening that file restores the editing workspace; undo/redo history starts empty. Only Splatypus reads it.
+
+Choose **PLY** when you need a standard interoperable file. The dialog can include hidden layers and spherical harmonics. PLY output is binary little-endian standard 3DGS PLY and includes only live splats, so it intentionally flattens the editable project structure. Chrome uses the File System Access API when available; Firefox and Safari use a local download fallback.
 
 ## Coordinate convention
 
