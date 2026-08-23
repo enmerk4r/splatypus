@@ -116,9 +116,12 @@ export function placePoint(
   let onSurface = false;
   if (mode === 'plane') {
     const result = new Vector3();
-    point =
-      rayFor(viewer, event).ray.intersectPlane(new Plane(new Vector3(0, 1, 0), 0), result) ??
-      undefined;
+    // The work plane when the user has set one, else the horizontal ground plane it
+    // defaults to — an untouched work plane is that same plane, so this is one path.
+    const plane = viewer.workPlane.enabled
+      ? viewer.workPlane.plane()
+      : new Plane(new Vector3(0, 1, 0), 0);
+    point = rayFor(viewer, event).ray.intersectPlane(plane, result) ?? undefined;
   } else if (mode === 'depth' && state.first) {
     point = intersectViewPlane(viewer, event, state.first, state.viewDir);
   } else {

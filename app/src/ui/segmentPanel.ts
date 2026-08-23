@@ -52,7 +52,7 @@ export function createSegmentPanel(
       </div>
       <hr class="segment-divider" />
       <div class="segment-row segment-ai-head">
-        <span>AI select (A)</span>
+        <span>AI select (J)</span>
         <span class="segment-ai-state" id="ai-state"></span>
       </div>
       <div class="segment-row">
@@ -66,6 +66,10 @@ export function createSegmentPanel(
       <div class="segment-row">
         <label for="ai-density">Detail</label>
         <input type="range" id="ai-density" min="6" max="28" step="2" value="16" />
+      </div>
+      <div class="segment-row">
+        <label for="ai-name">Name objects</label>
+        <input type="checkbox" id="ai-name" checked />
       </div>
       <div class="segment-actions">
         <button type="button" id="ai-all" class="primary">Segment everything</button>
@@ -103,6 +107,7 @@ export function createSegmentPanel(
   const aiStatus = pick<HTMLParagraphElement>('ai-status');
   const aiDensity = pick<HTMLInputElement>('ai-density');
   const aiAll = pick<HTMLButtonElement>('ai-all');
+  const aiName = pick<HTMLInputElement>('ai-name');
   const aiCommit = pick<HTMLButtonElement>('ai-commit');
   const aiReset = pick<HTMLButtonElement>('ai-reset');
 
@@ -175,10 +180,11 @@ export function createSegmentPanel(
     aiDepth.disabled = !active;
     aiGrow.disabled = !active;
     aiDensity.disabled = !active;
-    aiAll.disabled = !active || ai.busy || state !== 'ready';
-    aiAll.title = active
+    aiName.checked = ai.nameObjects;
+    aiAll.disabled = ai.busy || !segmentation.targetLayer();
+    aiAll.title = segmentation.targetLayer()
       ? `Sample a ${aiDensity.value}×${aiDensity.value} grid of points and turn every object it finds into a group`
-      : 'Pick the AI select tool first';
+      : 'Select a layer first';
     aiCommit.disabled = !ai.hasProposal || ai.busy;
     aiReset.disabled = ai.promptPoints.length === 0;
 
@@ -276,6 +282,9 @@ export function createSegmentPanel(
   aiDepth.addEventListener('input', onAiSettings);
   aiDensity.addEventListener('input', onAiSettings);
   aiAll.addEventListener('click', () => void ai.segmentAll());
+  aiName.addEventListener('change', () => {
+    ai.nameObjects = aiName.checked;
+  });
   aiGrow.addEventListener('input', onAiSettings);
   aiPrev.addEventListener('click', () => ai.cycleCandidate(-1));
   aiNext.addEventListener('click', () => ai.cycleCandidate(1));

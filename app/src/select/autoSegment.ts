@@ -1,3 +1,6 @@
+import { cropFrame } from '../ai/framePixels';
+import type { CapturedFrame } from '../viewer/Viewer';
+import type { LabelSession } from '../ai/labelSession';
 import { bestChannel, cropLowResMask } from '../ai/maskDecode';
 import type { SamSession } from '../ai/samSession';
 import type { Layer } from '../model/Layer';
@@ -56,6 +59,8 @@ export interface AutoSegmentResult {
   kept: number;
   /** Fraction of the layer's live splats that ended up in some group. */
   coverage: number;
+  /** How many groups came back with a recognised object name. */
+  named: number;
 }
 
 export interface AutoSegmentProgress {
@@ -124,6 +129,39 @@ export function samplePoints(
   return points;
 }
 
+/**
+ * Screen bounds of a group's splats, in the captured frame's pixels — the crop the namer
+ * is shown. Uses the projection already computed for the lift, so it costs one pass.
+ */
+export function groupBounds(
+  indices: Uint32Array,
+  index: ScreenIndex,
+  frame: { scaleX: number; scaleY: number; width: number; height: number },
+): { x: number; y: number; width: number; height: number } | undefined {
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
+  for (const splat of indices) {
+    const px = index.px[splat]!;
+    if (Number.isNaN(px)) continue;
+    const py = index.py[splat]!;
+    if (px < minX) minX = px;
+    if (px > maxX) maxX = px;
+    if (py < minY) minY = py;
+    if (py > maxY) maxY = py;
+  }
+  if (!Number.isFinite(minX)) return undefined;
+  const x = minX * frame.scaleX;
+  const y = minY * frame.scaleY;
+  return {
+    x,
+    y,
+    width: Math.max(1, maxX * frame.scaleX - x),
+    height: Math.max(1, maxY * frame.scaleY - y),
+  };
+}
+
 export interface Proposal {
   indices: Uint32Array;
   score: number;
@@ -173,12 +211,84 @@ export function partitionProposals(
   return { ids, groups, assigned };
 }
 
+export interface AutoSegmentContext {
+  /** Names objects when supplied; groups keep their numbers otherwise. */
+  labels?: LabelSession;
+  /** The frame the view was encoded from, which the namer crops out of. */
+  frame?: CapturedFrame;
+}
+
+/**
+ * Asks the namer what each group is, and renames the ones it recognises.
+ *
+ * Runs after deduplication rather than per proposal: hundreds of raw masks would mean
+ * hundreds of image encodes, while the surviving groups are a couple of dozen. Failures
+ * are swallowed on purpose — an unnamed group is still a perfectly good group, and losing
+ * the whole segmentation because a classifier hiccuped would be a poor trade.
+ */
+async function nameGroups(
+  groups: GroupInfo[],
+  ids: Uint32Array,
+  index: ScreenIndex,
+  context: AutoSegmentContext,
+  onProgress?: (progress: AutoSegmentProgress) => void,
+): Promise<number> {
+  const { labels, frame } = context;
+  if (!labels?.ready || !frame) return 0;
+
+  const members = new Map<number, number[]>();
+  for (let splat = 0; splat < ids.length; splat += 1) {
+    const id = ids[splat]!;
+    if (id === UNASSIGNED) continue;
+    const list = members.get(id);
+    if (list) list.push(splat);
+    else members.set(id, [splat]);
+  }
+
+  let named = 0;
+  for (let position = 0; position < groups.length; position += 1) {
+    const group = groups[position]!;
+    onProgress?.({
+      done: position,
+      total: groups.length,
+      message: `Naming objects… ${position + 1}/${groups.length}`,
+    });
+    const indices = Uint32Array.from(members.get(group.id) ?? []);
+    const bounds = groupBounds(indices, index, frame);
+    if (!bounds) continue;
+    try {
+      const guess = await labels.classify(cropFrame(frame, bounds, 0.12));
+      if (guess.name) {
+        group.name = guess.name;
+        named += 1;
+      }
+    } catch {
+      // One object failing to classify is not worth losing the rest over.
+    }
+    if (position % 4 === 3) await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  // Two monitors both called "Monitor" are indistinguishable in the layer list, so number
+  // repeats — but only repeats, since a lone chair reads better as "Chair" than "Chair 1".
+  const totals = new Map<string, number>();
+  for (const group of groups) totals.set(group.name, (totals.get(group.name) ?? 0) + 1);
+  const seen = new Map<string, number>();
+  for (const group of groups) {
+    if ((totals.get(group.name) ?? 0) < 2) continue;
+    const next = (seen.get(group.name) ?? 0) + 1;
+    seen.set(group.name, next);
+    group.name = `${group.name} ${next}`;
+  }
+  return named;
+}
+
 export async function autoSegment(
   layer: Layer,
   viewer: Viewer,
   session: SamSession,
   settings: AutoSegmentSettings,
   onProgress?: (progress: AutoSegmentProgress) => void,
+  context: AutoSegmentContext = {},
 ): Promise<AutoSegmentResult | undefined> {
   if (!session.hasImage) return undefined;
   const canvas = viewer.canvasElement;
@@ -254,13 +364,16 @@ export async function autoSegment(
     settings,
   );
 
+  const named = await nameGroups(groups, ids, index, context, onProgress);
+
   return {
     groups: GroupMap.fromIds(ids, {
       numSplats: layer.store.count,
       numGroups: groups.length,
-      source: 'sam (automatic)',
+      source: context.labels?.ready ? 'sam + clip' : 'sam (automatic)',
       groups,
     }),
+    named,
     proposals: proposals.length,
     kept: groups.length,
     coverage: assigned / live,

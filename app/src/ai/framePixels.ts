@@ -71,3 +71,52 @@ export function downscale(frame: FrameImage, maxEdge: number): FrameImage {
   }
   return { data, width, height };
 }
+
+/** A rectangle in image pixels. */
+export interface Rect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Cuts a rectangle out of a frame, clamped to its bounds.
+ *
+ * `pad` grows the rectangle by a fraction of its own size before cutting. A classifier
+ * shown a mask trimmed exactly to an object sees it with no surroundings at all, which is
+ * unlike anything in its training data; a little context measurably improves the guess.
+ */
+export function cropFrame(frame: FrameImage, rect: Rect, pad = 0): FrameImage {
+  const padX = rect.width * pad;
+  const padY = rect.height * pad;
+  const x0 = Math.max(0, Math.floor(rect.x - padX));
+  const y0 = Math.max(0, Math.floor(rect.y - padY));
+  const x1 = Math.min(frame.width, Math.ceil(rect.x + rect.width + padX));
+  const y1 = Math.min(frame.height, Math.ceil(rect.y + rect.height + padY));
+  const width = Math.max(1, x1 - x0);
+  const height = Math.max(1, y1 - y0);
+
+  const data = new Uint8ClampedArray(width * height * 4);
+  for (let row = 0; row < height; row += 1) {
+    const from = ((y0 + row) * frame.width + x0) * 4;
+    data.set(frame.data.subarray(from, from + width * 4), row * width * 4);
+  }
+  return { data, width, height };
+}
+
+/**
+ * Softmax over CLIP similarities.
+ *
+ * Raw cosine similarities sit in a narrow band -- the winner might be 0.26 against a
+ * runner-up of 0.22 -- which is useless as a confidence measure. CLIP is trained with a
+ * learned temperature (100) that spreads those into real probabilities, so applying it is
+ * what makes a threshold meaningful rather than arbitrary.
+ */
+export function softmax(similarities: readonly number[], temperature = 100): number[] {
+  const scaled = similarities.map((value) => value * temperature);
+  const top = Math.max(...scaled);
+  const exponentials = scaled.map((value) => Math.exp(value - top));
+  const total = exponentials.reduce((sum, value) => sum + value, 0) || 1;
+  return exponentials.map((value) => value / total);
+}

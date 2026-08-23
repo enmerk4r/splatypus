@@ -149,26 +149,53 @@ export class PolylineTool {
     raycaster.setFromCamera(pointer, this.viewer.camera);
     let plane = this.plane;
     if (!plane) {
-      // First point: the height of whatever is under the cursor (any visible layer), else the grid.
-      const document = this.viewer.document;
-      const hit = document
-        ? (pickLayer(document, this.viewer.camera, pointer) ??
-          nearestProjectedPoint(document, this.viewer.camera, pointer, rect, 18))
-        : undefined;
-      plane = new Plane(new Vector3(0, 1, 0), -(hit?.point.y ?? 0));
+      const workPlane = this.viewer.workPlane;
+      if (workPlane.enabled) {
+        // An explicit work plane is a decision the user already made; do not second-guess
+        // it by snapping to whatever happens to be under the first click.
+        plane = workPlane.plane();
+      } else {
+        // First point: the height of whatever is under the cursor (any visible layer), else the grid.
+        const document = this.viewer.document;
+        const hit = document
+          ? (pickLayer(document, this.viewer.camera, pointer) ??
+            nearestProjectedPoint(document, this.viewer.camera, pointer, rect, 18))
+          : undefined;
+        plane = new Plane(new Vector3(0, 1, 0), -(hit?.point.y ?? 0));
+      }
     }
     const point = raycaster.ray.intersectPlane(plane, new Vector3());
     if (!point) return undefined;
     const previous = this.points.at(-1);
     if (this.ortho && previous && this.options.settings.shape === 'polyline') {
-      // Axis-aligned segments: keep the larger of the two in-plane deltas.
-      const dx = point.x - previous.x,
-        dz = point.z - previous.z;
-      if (Math.abs(dx) >= Math.abs(dz)) point.z = previous.z;
-      else point.x = previous.x;
+      // Axis-aligned segments, measured in the plane's own axes — on a tilted plane the
+      // world x/z that used to be used here are not in the plane at all.
+      const axes = this.planeAxes(plane);
+      const delta = point.clone().sub(previous);
+      const along = delta.dot(axes.u);
+      const across = delta.dot(axes.v);
+      point
+        .copy(previous)
+        .addScaledVector(
+          Math.abs(along) >= Math.abs(across) ? axes.u : axes.v,
+          Math.abs(along) >= Math.abs(across) ? along : across,
+        );
     }
     this.plane ??= plane;
     return this.constrain(point);
+  }
+
+  /**
+   * Two perpendicular directions lying in the plane. Prefers world X and Z so a horizontal
+   * plane behaves exactly as before; falls back to another axis when the plane is vertical
+   * and X would be degenerate.
+   */
+  private planeAxes(plane: Plane): { u: Vector3; v: Vector3 } {
+    const normal = plane.normal;
+    const seed = Math.abs(normal.x) > 0.9 ? new Vector3(0, 0, 1) : new Vector3(1, 0, 0);
+    const u = seed.clone().projectOnPlane(normal).normalize();
+    const v = new Vector3().crossVectors(normal, u).normalize();
+    return { u, v };
   }
 
   /**

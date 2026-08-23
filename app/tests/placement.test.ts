@@ -16,6 +16,9 @@ function fixture(): { viewer: Viewer; state: PlacementState } {
       getBoundingClientRect: () => ({ left: 0, top: 0, width: 100, height: 100 }),
     },
     cameraRig: { controls: { target: new Vector3(0, 0, 0) } },
+    // Plane mode consults the work plane; disabled means the horizontal ground plane,
+    // which is what these expectations were written against.
+    workPlane: { enabled: false },
   } as unknown as Viewer;
   return {
     viewer,

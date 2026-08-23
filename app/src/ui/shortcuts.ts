@@ -88,9 +88,19 @@ export function wireShortcuts(viewer: Viewer, actions: ShortcutActions): () => v
       case 'KeyP':
         if (viewer.cameraRig.mode === 'orbit') viewer.setTool('polyline');
         break;
-      case 'KeyA':
+      case 'KeyJ':
+        // Not A: that is fly mode's strafe-left, so in fly mode the tool never got the key.
         if (viewer.cameraRig.mode === 'orbit') viewer.setTool('aiselect');
         break;
+      case 'KeyK': {
+        // Toggle the work plane; showing it also brings its gizmo up, since placing it is
+        // the only reason to show it.
+        const plane = viewer.workPlane;
+        const next = !plane.enabled;
+        plane.setEnabled(next);
+        plane.setEditing(next);
+        break;
+      }
       case 'BracketLeft':
       case 'BracketRight': {
         // The AI selection tool owns the brackets while it is active: they step through

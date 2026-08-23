@@ -49,6 +49,11 @@ const PATHS: Record<string, string> = {
   unlock: 'M3.5 7h9v7h-9zM5.5 7V5a2.5 2.5 0 0 1 4.8-1M8 10v1.5',
   layers: 'M8 2 14 5.5 8 9 2 5.5ZM2 8.5l6 3.5 6-3.5M2 11.5 8 15l6-3.5',
   segment: 'M2 2h5v5H2zM9 2h5v5H9zM2 9h5v5H2zM9 9h5v5H9z',
+  workplane: 'M1 5.5 8 2l7 3.5L8 9zM1 5.5v3L8 12l7-3.5v-3',
+  planeMove:
+    'M8 1.5 10 4H8.8v3.2H12V6l2.5 2L12 10V8.8H8.8V12H10l-2 2.5L6 12h1.2V8.8H4V10L1.5 8 4 6v1.2h3.2V4H6z',
+  planeRotate: 'M8 3a5 5 0 1 1-4.6 3M3 2v3.4h3.4',
+  planeReset: 'M2 8a6 6 0 1 0 1.8-4.3M2 2v3.5h3.5',
   aiselect:
     'M3 2v9l2.3-2.3 1.7 3.6 1.8-.9-1.7-3.5H10zM12.2 1.6l.6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6z',
   chevron: 'M4 6l4 4 4-4',
