@@ -1,0 +1,21 @@
+# Normalise line endings: LF in the repo and in every checkout (matches prettier).
+* text=auto eol=lf
+
+# Binary assets never get converted.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.ply binary
+*.spz binary
+*.splat binary
+*.ksplat binary
+*.sog binary
+*.groups binary
+*.splatypus binary
+*.zip binary
+*.pdf binary

@@ -8,3 +8,6 @@ models/
 
 app/public/samples/_*.ply
 app/public/samples/_*.groups
+
+# root-level installs (the app lives in app/)
+node_modules/
