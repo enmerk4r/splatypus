@@ -237,6 +237,27 @@ export class Segmentation extends EventTarget {
     this.dispatchEvent(new Event('groups-changed'));
   }
 
+  /**
+   * Adopts a whole segmentation for a layer as one undo step — for a bake that produces
+   * many groups at once, rather than a single selection.
+   */
+  applyGroupsUndoable(layer: Layer, groups: GroupMap | undefined, label: string): void {
+    const document = this.document;
+    if (!document) {
+      this.applyGroups(layer, groups);
+      return;
+    }
+    document.history.push(
+      new SetGroups(
+        document,
+        layer.id,
+        groups,
+        (target, next) => this.applyGroups(target, next),
+        label,
+      ),
+    );
+  }
+
   /** Re-runs the geometric bake over a layer's store and adopts the result. */
   rebake(layer: Layer, basis: BakeBasis, detail: number): { numGroups: number; assigned: number } {
     const store = layer.store;

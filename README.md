@@ -122,6 +122,21 @@ layer**, `.groups` export and project save all work on it unchanged. `Ctrl+Z` un
 Only the first click pays for the image encoder; the embedding is cached for the view, so
 refining with negative clicks is near-instant. Moving the camera invalidates it and re-encodes.
 
+**Segment everything** does the whole scene at once, without you clicking each object: it
+samples a grid of points over the view (**Detail** sets the grid; 16 → 256 prompts), runs them
+all through the mask decoder in batches against the one cached embedding, lifts each mask to 3D
+and merges duplicates. Every surviving object becomes a group, the label overlay comes on, and
+you click one to select it — the same as after a geometric bake. A few seconds for a typical
+view. Undoable.
+
+Deduplication happens in 3D rather than 2D, because two prompts landing on the same chair give
+different-looking masks but nearly identical splats. Proposals claim splats **tightest first**:
+SAM confidently returns over-inclusive masks among hundreds of prompts, and letting the biggest
+claim first hands whole objects to a blob. On a four-object test scene, largest-first found 3
+groups — one 51 % on the wrong object, one object missing entirely — while tightest-first found
+all 4, each 99–100 % on its own object. The cost is over-segmentation: a chair leg may become
+its own group. Shift-click unions groups, which is the cheaper problem to have.
+
 Two controls in the SEGMENT panel decide what "behind" means — the paper's two operators:
 
 - **Depth** — how far behind the front surface a splat may sit and still be taken. This is

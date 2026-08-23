@@ -73,6 +73,52 @@ arrive faster than inference returns.
 - `DepthGrid` covers the **whole document**, so an occluder in another layer correctly
   rejects a splat. That came free and is the right semantics.
 
+## Segment everything (automatic mask generation)
+
+`select/autoSegment.ts`. A grid of points is sampled over the view and every one is prompted;
+survivors become groups. Three things make it affordable and correct:
+
+- **Batched prompts.** The decoder takes a `point_batch` dimension: `input_points` shaped
+  `[1, P, 1, 2]` returns `pred_masks [1, P, 3, 256, 256]`. P prompts cost roughly one call.
+- **Raw logits, not `post_process_masks`.** That helper upsamples every candidate to full
+  resolution — hundreds of MB for a grid. The 256×256 logits are cropped to the
+  image-bearing corner (`cropLowResMask`) and used directly; `liftMask` already scales a
+  mask of any resolution.
+- **One projection cache.** `projectToMaskCells` resolves every splat to a mask cell and
+  applies the depth test once, so each of the hundreds of candidates costs one array lookup
+  per splat rather than a fresh projection. This is the difference between seconds and minutes.
+
+### Ordering is the whole ball game
+
+`partitionProposals` takes proposals **smallest first**. This was measured, not assumed — an
+earlier largest-first version was wrong. On a synthetic four-object scene (64 prompts):
+
+| Order | Result |
+|---|---|
+| Largest first | 3 groups; one 51 % on the wrong object; one object missing |
+| By predicted IoU | 3 groups; same blob failure |
+| **Smallest first** | **4 groups, each 99–100 % on its own object** |
+
+SAM returns confidently over-inclusive masks — a blob spanning two objects and the floor
+between them, with a stability score (0.97) as high as the good masks, so stability filtering
+does *not* separate them. Only claim order does. The cost is over-segmentation, which
+shift-click fixes; a blob that swallowed two objects cannot be fixed.
+
+## Bug found by probing: prompt coordinate space
+
+`pointsToImageSpace` originally sent capture-pixel coordinates straight to the model. The
+processor normally applies `reshape_input_points`, scaling by `reshaped/original` — bypassing
+the processor means carrying that factor yourself. Symptom: clicks land short of where the
+user pointed, by `reshapedLongEdge / captureLongEdge`.
+
+It hid well: `captureFrame` caps the long edge at 1024 and the processor resizes to 1024, so
+the factor is exactly 1 whenever the canvas drawing buffer is ≥ 1024 on its long edge — most
+desktop windows at DPR 2. It only misbehaves on small windows or DPR 1. `promptScale` now
+composes both resizes.
+
+This is worth knowing because the same trap applies to any future prompt type (boxes, masks):
+anything handed directly to the model, rather than through the processor, is in reshaped space.
+
 ## Known sharp edges
 
 - **LoD layers (≥ 1.5 M splats) show no tint** — Spark renders its own LoD copy, so

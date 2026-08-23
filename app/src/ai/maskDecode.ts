@@ -80,3 +80,43 @@ export function pointsToImageSpace(
     labels: points.map((point) => (point.positive ? 1 : 0)),
   };
 }
+
+/**
+ * Extracts one candidate from a batched low-resolution logit block, keeping only the
+ * image-bearing corner.
+ *
+ * The decoder writes into a padded square, so a non-square view leaves the right or bottom
+ * of the raw mask as padding. Cropping to `valid` makes the result correspond 1:1 to the
+ * captured frame again, which is what lets `liftMask` scale it by width alone.
+ *
+ * A logit above zero is inside the mask — the same threshold `post_process_masks` uses.
+ */
+export function cropLowResMask(
+  logits: Float32Array,
+  side: number,
+  prompt: number,
+  channel: number,
+  channels: number,
+  valid: { width: number; height: number },
+): MaskImage {
+  const width = Math.max(1, Math.min(valid.width, side));
+  const height = Math.max(1, Math.min(valid.height, side));
+  const base = (prompt * channels + channel) * side * side;
+  const data = new Uint8Array(width * height);
+  for (let row = 0; row < height; row += 1) {
+    const from = base + row * side;
+    const to = row * width;
+    for (let column = 0; column < width; column += 1)
+      if (logits[from + column]! > 0) data[to + column] = 1;
+  }
+  return { data, width, height };
+}
+
+/** Index of the best-scoring channel for one prompt in a batched score block. */
+export function bestChannel(scores: ArrayLike<number>, prompt: number, channels: number): number {
+  let best = 0;
+  for (let channel = 1; channel < channels; channel += 1)
+    if ((scores[prompt * channels + channel] ?? 0) > (scores[prompt * channels + best] ?? 0))
+      best = channel;
+  return best;
+}

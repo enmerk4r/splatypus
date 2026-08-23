@@ -61,6 +61,13 @@ export function createSegmentPanel(
         <label for="ai-grow">Grow</label>
         <input type="range" id="ai-grow" min="0" max="4" step="1" value="1" />
       </div>
+      <div class="segment-row">
+        <label for="ai-density">Detail</label>
+        <input type="range" id="ai-density" min="6" max="28" step="2" value="16" />
+      </div>
+      <div class="segment-actions">
+        <button type="button" id="ai-all" class="primary">Segment everything</button>
+      </div>
       <div class="segment-row" id="ai-candidate-row">
         <label>Mask</label>
         <div class="segment-candidate">
@@ -92,6 +99,8 @@ export function createSegmentPanel(
   const aiPrev = pick<HTMLButtonElement>('ai-prev');
   const aiNext = pick<HTMLButtonElement>('ai-next');
   const aiStatus = pick<HTMLParagraphElement>('ai-status');
+  const aiDensity = pick<HTMLInputElement>('ai-density');
+  const aiAll = pick<HTMLButtonElement>('ai-all');
   const aiCommit = pick<HTMLButtonElement>('ai-commit');
   const aiReset = pick<HTMLButtonElement>('ai-reset');
 
@@ -163,6 +172,11 @@ export function createSegmentPanel(
     aiNext.disabled = count < 2;
     aiDepth.disabled = !active;
     aiGrow.disabled = !active;
+    aiDensity.disabled = !active;
+    aiAll.disabled = !active || ai.busy || state !== 'ready';
+    aiAll.title = active
+      ? `Sample a ${aiDensity.value}×${aiDensity.value} grid of points and turn every object it finds into a group`
+      : 'Pick the AI select tool first';
     aiCommit.disabled = !ai.hasProposal || ai.busy;
     aiReset.disabled = ai.promptPoints.length === 0;
 
@@ -172,7 +186,7 @@ export function createSegmentPanel(
     aiStatus.textContent = !active
       ? 'Press A, or pick the tool, to select an object by clicking it.'
       : ai.busy
-        ? 'Working…'
+        ? ai.progress || 'Working…'
         : state === 'error'
           ? (ai.session.error ?? 'The model could not be loaded.')
           : ai.promptPoints.length === 0
@@ -220,6 +234,7 @@ export function createSegmentPanel(
     ai.setSettings({
       depthTolerance: depthFromSlider(Number(aiDepth.value)),
       growSteps: Number(aiGrow.value),
+      density: Number(aiDensity.value),
     });
   };
   const onAiCommit = (): void => {
@@ -257,6 +272,8 @@ export function createSegmentPanel(
   viewer.addEventListener('tool-changed', renderAi);
   ai.addEventListener('changed', renderAi);
   aiDepth.addEventListener('input', onAiSettings);
+  aiDensity.addEventListener('input', onAiSettings);
+  aiAll.addEventListener('click', () => void ai.segmentAll());
   aiGrow.addEventListener('input', onAiSettings);
   aiPrev.addEventListener('click', () => ai.cycleCandidate(-1));
   aiNext.addEventListener('click', () => ai.cycleCandidate(1));

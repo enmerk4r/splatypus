@@ -20,6 +20,8 @@ export type SamBackend = 'webgpu' | 'wasm';
 
 /** Distilled SAM: small enough to fetch on demand, good enough for object selection. */
 const MODEL_ID = 'Xenova/slimsam-77-uniform';
+/** Side of the mask decoder's fixed low-resolution output. */
+const LOW_RES_SIDE = 256;
 
 type Transformers = typeof import('@huggingface/transformers');
 
@@ -92,7 +94,17 @@ export class SamSession extends EventTarget {
   /** Encoder output for the current view, reused by every prompt against it. */
   private embeddings?: Record<string, unknown>;
   private imageSizes?: { original: [number, number][]; reshaped: [number, number][] };
-  private frameScale = { x: 1, y: 1 };
+  /**
+   * CSS pixel → model prompt space, in one factor.
+   *
+   * Two resizes stack here: `captureFrame` may have downscaled the canvas, and the
+   * processor then resizes that to its own 1024-long-edge input. Prompts handed straight to
+   * the model (rather than through the processor) must carry both, or a click lands short
+   * of where the user pointed.
+   */
+  private promptScale = { x: 1, y: 1 };
+  /** The sub-rectangle of the raw low-res mask that is image rather than padding. */
+  private validMask = { width: 0, height: 0 };
 
   get state(): SamState {
     return this.stateValue;
@@ -188,13 +200,75 @@ export class SamSession extends EventTarget {
       const inputs = await processor(image, {});
       this.embeddings = await model.get_image_embeddings(inputs);
       this.imageSizes = { original: inputs.original_sizes, reshaped: inputs.reshaped_input_sizes };
-      this.frameScale = { x: frame.scaleX, y: frame.scaleY };
+      const [originalHeight, originalWidth] = inputs.original_sizes[0] ?? [1, 1];
+      const [reshapedHeight, reshapedWidth] = inputs.reshaped_input_sizes[0] ?? [1, 1];
+      this.promptScale = {
+        x: frame.scaleX * (reshapedWidth / Math.max(originalWidth, 1)),
+        y: frame.scaleY * (reshapedHeight / Math.max(originalHeight, 1)),
+      };
+      // The model pads its input to a square, so only the top-left corner of the raw mask
+      // is image. LOW_RES_SIDE is the decoder's fixed output size.
+      const pad = Math.max(reshapedWidth, reshapedHeight);
+      this.validMask = {
+        width: Math.round((reshapedWidth * LOW_RES_SIDE) / pad),
+        height: Math.round((reshapedHeight * LOW_RES_SIDE) / pad),
+      };
       this.setState('ready');
     } catch (error) {
       this.errorValue = describe(error);
       this.setState('error');
       throw error;
     }
+  }
+
+  /** Size of the image-bearing corner of a raw low-res mask, for `cropLowResMask`. */
+  get validMaskSize(): { width: number; height: number } {
+    return this.validMask;
+  }
+
+  /**
+   * Runs many independent single-point prompts through the mask decoder in one call.
+   *
+   * This is what makes "segment everything" affordable. The decoder accepts a
+   * `point_batch` dimension, so N prompts cost roughly one call rather than N, and the
+   * cached image embedding is shared across all of them. Masks come back at the decoder's
+   * native 256×256 as raw logits — deliberately not run through `post_process_masks`,
+   * which upsamples every candidate to full resolution and would cost hundreds of
+   * megabytes for a grid.
+   *
+   * @returns logits and scores, or undefined when no view is encoded.
+   */
+  async segmentBatch(points: readonly { x: number; y: number }[]): Promise<
+    | {
+        logits: Float32Array;
+        scores: Float32Array;
+        prompts: number;
+        channels: number;
+        side: number;
+      }
+    | undefined
+  > {
+    if (!this.embeddings || points.length === 0) return undefined;
+    const { Tensor } = await loadTransformers();
+    const model = this.model!;
+    const scaled = points.flatMap((point) => [
+      point.x * this.promptScale.x,
+      point.y * this.promptScale.y,
+    ]);
+    const count = points.length;
+    const outputs = await model({
+      ...this.embeddings,
+      input_points: new Tensor('float32', scaled, [1, count, 1, 2]),
+      input_labels: new Tensor('int64', new Array(count).fill(1n), [1, count, 1]),
+    });
+    const masks = outputs.pred_masks as { data: Float32Array; dims: number[] };
+    return {
+      logits: masks.data,
+      scores: outputs.iou_scores.data,
+      prompts: masks.dims[1] ?? count,
+      channels: masks.dims[2] ?? 1,
+      side: masks.dims[3] ?? LOW_RES_SIDE,
+    };
   }
 
   /** Forgets the encoded view — call when the camera moves. */
@@ -214,7 +288,7 @@ export class SamSession extends EventTarget {
     const { Tensor } = await loadTransformers();
     const model = this.model!;
     const processor = this.processor!;
-    const mapped = pointsToImageSpace(points, this.frameScale.x, this.frameScale.y);
+    const mapped = pointsToImageSpace(points, this.promptScale.x, this.promptScale.y);
 
     const input_points = new Tensor('float32', mapped.points.flat(), [
       1,

@@ -6,6 +6,7 @@ import { DepthGrid } from '../sketch/depthGrid';
 import { ScreenIndex } from '../sketch/screenIndex';
 import type { ToastLevel } from '../ui/hud';
 import type { Viewer } from '../viewer/Viewer';
+import { autoSegment, DEFAULT_AUTO_SETTINGS } from './autoSegment';
 import { growSelection, liftMask } from './maskLift';
 import { MaskOverlay } from './maskOverlay';
 import type { Segmentation } from './Segmentation';
@@ -24,9 +25,15 @@ export interface AiSelectSettings {
   depthTolerance: number;
   /** Flood-fill hops used to repair the silhouette the mask cut through. */
   growSteps: number;
+  /** Points per side of the "segment everything" sampling grid. */
+  density: number;
 }
 
-export const DEFAULT_AI_SETTINGS: AiSelectSettings = { depthTolerance: 0.02, growSteps: 1 };
+export const DEFAULT_AI_SETTINGS: AiSelectSettings = {
+  depthTolerance: 0.02,
+  growSteps: 1,
+  density: DEFAULT_AUTO_SETTINGS.density,
+};
 /** The tolerance slider's top stop means "no occlusion test at all". */
 export const FRUSTUM_TOLERANCE = 1;
 
@@ -55,6 +62,7 @@ export class AiSelectTool extends EventTarget {
   private candidates?: MaskCandidates;
   private chosen = 0;
   private busyValue = false;
+  private progressValue = '';
   private layer?: Layer;
   /** Bumped per prompt so a slow decode that lost the race cannot overwrite a newer one. */
   private sequence = 0;
@@ -81,6 +89,10 @@ export class AiSelectTool extends EventTarget {
   }
   get busy(): boolean {
     return this.busyValue;
+  }
+  /** What the tool is doing right now, for the panel to show during a long run. */
+  get progress(): string {
+    return this.progressValue;
   }
   get promptPoints(): readonly PromptPoint[] {
     return this.points;
@@ -181,6 +193,64 @@ export class AiSelectTool extends EventTarget {
     this.segmentation.selectIndices(layer, indices, { name, additive });
     this.options.notify(`Selected ${indices.length.toLocaleString()} splats.`);
     this.clearPrompt();
+  }
+
+  /**
+   * Segments every object in the current view at once, replacing the layer's segmentation.
+   *
+   * Unlike `commit`, this does not select anything — it produces many groups and turns the
+   * overlay on, so the scene arrives colour-coded and the user picks an object by clicking
+   * it, the same as after a geometric bake.
+   */
+  async segmentAll(): Promise<void> {
+    const layer = this.layer;
+    if (!layer || this.busyValue) return;
+    if (!this.session.hasImage) {
+      this.options.notify('The view is still being read — try again in a moment.', 'warning');
+      return;
+    }
+    this.busyValue = true;
+    this.clearPrompt();
+    this.emitChange();
+    const started = performance.now();
+    try {
+      const radius = Math.max(layer.localBounds().radius, 1e-4);
+      const infinite = this.settings.depthTolerance >= FRUSTUM_TOLERANCE;
+      const result = await autoSegment(
+        layer,
+        this.viewer,
+        this.session,
+        {
+          ...DEFAULT_AUTO_SETTINGS,
+          density: this.settings.density,
+          depthTolerance: infinite ? Infinity : this.settings.depthTolerance * radius,
+          minOpacity: 0.2,
+        },
+        (progress) => {
+          this.progressValue = progress.message;
+          this.emitChange();
+        },
+      );
+      if (!result || result.kept === 0) {
+        this.options.notify('Nothing came back — try a closer view or a denser grid.', 'warning');
+        return;
+      }
+      this.segmentation.applyGroupsUndoable(layer, result.groups, 'Segment everything');
+      this.segmentation.setOverlay(true);
+      const seconds = ((performance.now() - started) / 1000).toFixed(1);
+      this.options.notify(
+        `${result.kept} objects · ${Math.round(result.coverage * 100)}% of the layer · ${seconds}s. Click one to select it.`,
+      );
+    } catch (error) {
+      this.options.notify(
+        `Segment everything failed: ${error instanceof Error ? error.message : String(error)}`,
+        'error',
+      );
+    } finally {
+      this.busyValue = false;
+      this.progressValue = '';
+      this.emitChange();
+    }
   }
 
   /** Drops the clicks and the proposed mask, keeping the encoded view. */
