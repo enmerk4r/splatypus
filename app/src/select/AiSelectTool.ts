@@ -1,12 +1,15 @@
 import { maskArea } from '../ai/maskDecode';
 import type { MaskCandidates, PromptPoint } from '../ai/maskDecode';
+import { LabelSession } from '../ai/labelSession';
 import { SamSession } from '../ai/samSession';
+import type { CapturedFrame } from '../viewer/Viewer';
 import type { Layer } from '../model/Layer';
 import { DepthGrid } from '../sketch/depthGrid';
 import { ScreenIndex } from '../sketch/screenIndex';
 import type { ToastLevel } from '../ui/hud';
 import type { Viewer } from '../viewer/Viewer';
-import { autoSegment, DEFAULT_AUTO_SETTINGS } from './autoSegment';
+import { autoSegment, DEFAULT_AUTO_SETTINGS, groupBounds } from './autoSegment';
+import { cropFrame } from '../ai/framePixels';
 import { growSelection, liftMask } from './maskLift';
 import { MaskOverlay } from './maskOverlay';
 import type { Segmentation } from './Segmentation';
@@ -55,6 +58,9 @@ export const FRUSTUM_TOLERANCE = 1;
  */
 export class AiSelectTool extends EventTarget {
   readonly session = new SamSession();
+  readonly labels = new LabelSession();
+  /** Name objects with CLIP after segmenting. Off falls back to "Object n". */
+  nameObjects = true;
   settings: AiSelectSettings = { ...DEFAULT_AI_SETTINGS };
   private readonly canvas: HTMLCanvasElement;
   private readonly overlay: MaskOverlay;
@@ -66,6 +72,10 @@ export class AiSelectTool extends EventTarget {
   private layer?: Layer;
   /** Bumped per prompt so a slow decode that lost the race cannot overwrite a newer one. */
   private sequence = 0;
+  /** Shared so the toolbar button and the tool activation cannot both encode the view. */
+  private beginInFlight?: Promise<void>;
+  /** The frame the view was encoded from, kept so the namer can crop objects out of it. */
+  private frame?: CapturedFrame;
 
   constructor(
     private readonly viewer: Viewer,
@@ -80,6 +90,7 @@ export class AiSelectTool extends EventTarget {
     this.viewer.addEventListener('tool-changed', this.onToolChanged);
     this.viewer.addEventListener('document-changed', this.reset);
     this.session.addEventListener('state-changed', this.emitChange);
+    this.labels.addEventListener('state-changed', this.emitChange);
     this.session.addEventListener('progress', this.onProgress);
     window.addEventListener('keydown', this.onKeyDown);
   }
@@ -125,6 +136,12 @@ export class AiSelectTool extends EventTarget {
 
   /** Loads the model (if needed) and encodes the current view. */
   async begin(): Promise<void> {
+    return (this.beginInFlight ??= this.beginOnce().finally(() => {
+      this.beginInFlight = undefined;
+    }));
+  }
+
+  private async beginOnce(): Promise<void> {
     const layer = this.segmentation.targetLayer();
     if (!layer) {
       this.options.notify('Select a layer to segment first.', 'warning');
@@ -140,7 +157,9 @@ export class AiSelectTool extends EventTarget {
     try {
       this.viewer.lockCamera(true);
       await this.session.prepare();
-      await this.session.setImage(await this.viewer.captureFrame());
+      const frame = await this.viewer.captureFrame();
+      this.frame = frame;
+      await this.session.setImage(frame);
       this.options.notify('Click the object to select it. Alt-click removes a region.');
     } catch (error) {
       this.viewer.lockCamera(false);
@@ -189,10 +208,32 @@ export class AiSelectTool extends EventTarget {
     if (this.settings.growSteps > 0)
       indices = growSelection(layer, indices, medianSpacing(layer) * 2, this.settings.growSteps);
 
-    const name = `AI selection ${(layer.groups?.numGroups ?? 0) + 1}`;
-    this.segmentation.selectIndices(layer, indices, { name, additive });
+    const fallback = `AI selection ${(layer.groups?.numGroups ?? 0) + 1}`;
+    const groupId = this.segmentation.selectIndices(layer, indices, { name: fallback, additive });
     this.options.notify(`Selected ${indices.length.toLocaleString()} splats.`);
     this.clearPrompt();
+    // Naming needs the network, so it lands after the selection rather than delaying it.
+    if (this.nameObjects && groupId >= 0) void this.nameSelection(layer, indices, index, groupId);
+  }
+
+  /** Asks the namer what a single selection is and renames its group in place. */
+  private async nameSelection(
+    layer: Layer,
+    indices: Uint32Array,
+    index: ScreenIndex,
+    groupId: number,
+  ): Promise<void> {
+    const frame = this.frame;
+    if (!frame) return;
+    try {
+      await this.labels.prepare();
+      const bounds = groupBounds(indices, index, frame);
+      if (!bounds) return;
+      const guess = await this.labels.classify(cropFrame(frame, bounds, 0.12));
+      if (guess.name) this.segmentation.renameGroup(layer, groupId, guess.name);
+    } catch {
+      // The selection is already made and correct; only its name is missing.
+    }
   }
 
   /**
@@ -203,10 +244,15 @@ export class AiSelectTool extends EventTarget {
    * it, the same as after a geometric bake.
    */
   async segmentAll(): Promise<void> {
+    if (this.busyValue) return;
+    // Start from cold if need be: picking the tool locks the camera and encodes the view,
+    // and there is no reason to make the user do that as a separate step first.
+    if (!this.active) this.viewer.setTool('aiselect');
+    if (!this.session.hasImage) await this.begin();
     const layer = this.layer;
-    if (!layer || this.busyValue) return;
+    if (!layer) return;
     if (!this.session.hasImage) {
-      this.options.notify('The view is still being read — try again in a moment.', 'warning');
+      this.options.notify('Could not read the view — check the model loaded.', 'warning');
       return;
     }
     this.busyValue = true;
@@ -216,6 +262,22 @@ export class AiSelectTool extends EventTarget {
     try {
       const radius = Math.max(layer.localBounds().radius, 1e-4);
       const infinite = this.settings.depthTolerance >= FRUSTUM_TOLERANCE;
+      if (this.nameObjects) {
+        // A namer that will not load is a missing nicety, not a failed segmentation.
+        try {
+          this.progressValue = 'Loading object namer…';
+          this.emitChange();
+          await this.labels.prepare((message) => {
+            this.progressValue = message;
+            this.emitChange();
+          });
+        } catch {
+          this.options.notify(
+            'Could not load the object namer; groups will be numbered.',
+            'warning',
+          );
+        }
+      }
       const result = await autoSegment(
         layer,
         this.viewer,
@@ -230,6 +292,7 @@ export class AiSelectTool extends EventTarget {
           this.progressValue = progress.message;
           this.emitChange();
         },
+        this.nameObjects ? { labels: this.labels, frame: this.frame } : {},
       );
       if (!result || result.kept === 0) {
         this.options.notify('Nothing came back — try a closer view or a denser grid.', 'warning');
@@ -238,8 +301,9 @@ export class AiSelectTool extends EventTarget {
       this.segmentation.applyGroupsUndoable(layer, result.groups, 'Segment everything');
       this.segmentation.setOverlay(true);
       const seconds = ((performance.now() - started) / 1000).toFixed(1);
+      const namedPart = result.named > 0 ? `, ${result.named} named` : '';
       this.options.notify(
-        `${result.kept} objects · ${Math.round(result.coverage * 100)}% of the layer · ${seconds}s. Click one to select it.`,
+        `${result.kept} objects${namedPart} · ${Math.round(result.coverage * 100)}% of the layer · ${seconds}s. Click one to select it.`,
       );
     } catch (error) {
       this.options.notify(
@@ -267,10 +331,12 @@ export class AiSelectTool extends EventTarget {
     this.viewer.removeEventListener('tool-changed', this.onToolChanged);
     this.viewer.removeEventListener('document-changed', this.reset);
     this.session.removeEventListener('state-changed', this.emitChange);
+    this.labels.removeEventListener('state-changed', this.emitChange);
     this.session.removeEventListener('progress', this.onProgress);
     window.removeEventListener('keydown', this.onKeyDown);
     this.overlay.dispose();
     this.session.dispose();
+    this.labels.dispose();
   }
 
   // ---- interaction --------------------------------------------------------------------

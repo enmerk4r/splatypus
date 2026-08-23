@@ -276,6 +276,25 @@ export class Segmentation extends EventTarget {
   }
 
   /**
+   * Renames one group in place.
+   *
+   * Not undoable, and deliberately so: this exists for the object namer, whose answer
+   * arrives after the selection is already made. Pushing a second history entry for it
+   * would mean the user has to undo twice to get rid of one click.
+   */
+  renameGroup(layer: Layer, groupId: number, name: string): void {
+    const groups = layer.groups;
+    if (!groups || groupId < 0 || groupId >= groups.numGroups) return;
+    const list = groups.meta.groups;
+    const info = list?.find((group) => group.id === groupId);
+    if (info) info.name = name;
+    else if (list) list.push({ id: groupId, name, count: groups.indicesOf(groupId).length });
+    else return;
+    this.dispatchEvent(new Event('groups-changed'));
+    this.dispatchEvent(new Event('selection-changed'));
+  }
+
+  /**
    * Adopts a whole segmentation for a layer as one undo step — for a bake that produces
    * many groups at once, rather than a single selection.
    */

@@ -88,7 +88,8 @@ export function wireShortcuts(viewer: Viewer, actions: ShortcutActions): () => v
       case 'KeyP':
         if (viewer.cameraRig.mode === 'orbit') viewer.setTool('polyline');
         break;
-      case 'KeyA':
+      case 'KeyJ':
+        // Not A: that is fly mode's strafe-left, so in fly mode the tool never got the key.
         if (viewer.cameraRig.mode === 'orbit') viewer.setTool('aiselect');
         break;
       case 'KeyK': {
