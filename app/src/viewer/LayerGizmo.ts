@@ -81,6 +81,14 @@ export class LayerGizmo {
     this.syncAttachment();
   }
 
+  /**
+   * Hides the gizmo's visuals without disturbing its enabled state or attachment — for an
+   * offscreen capture, where a segmentation model would otherwise happily segment the arrows.
+   */
+  setHelperVisible(visible: boolean): void {
+    this.controls.getHelper().visible = visible && this.enabledValue;
+  }
+
   /** True while the pointer is over a gizmo handle or a drag is in progress. */
   get isInteracting(): boolean {
     return this.controls.dragging || this.controls.axis !== null;

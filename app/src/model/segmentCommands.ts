@@ -8,6 +8,7 @@ import { Layer } from './Layer';
 import { DuplicateLayer, SetLayerTransform } from './compoundCommands';
 import { LockedLayerError } from './history';
 import type { Command } from './history';
+import type { GroupMap } from '../splats/groups';
 
 /** Runs several commands as one undo step (in order; undone in reverse). */
 export class CompositeCommand implements Command {
@@ -67,7 +68,48 @@ export class SetSplatsAlive implements Command {
 }
 
 /**
- * Lifts a set of splats out of a layer into a new `segment` layer and hides them in the
+ * Adopts a segmentation for a layer, undoably.
+ *
+ * The map is swapped wholesale rather than diffed: a `GroupMap` is one `Uint32Array` over
+ * the splats, so keeping both costs 4 bytes per splat for the life of the undo entry —
+ * cheap beside re-deriving it, and it makes undo exact even for a non-deterministic bake.
+ *
+ * `apply` is supplied by the caller (in practice `Segmentation.applyGroups`) so the model
+ * layer does not have to know about selection or painting.
+ */
+export class SetGroups implements Command {
+  private previous?: GroupMap;
+  private captured = false;
+  constructor(
+    private readonly document: Document,
+    private readonly layerId: string,
+    private readonly next: GroupMap | undefined,
+    private readonly apply: (layer: Layer, groups: GroupMap | undefined) => void,
+    readonly label = 'Segment',
+  ) {}
+  private layer(): Layer {
+    const layer = this.document.getLayer(this.layerId);
+    if (!layer) throw new Error('Layer no longer exists');
+    if (layer.locked) throw new LockedLayerError('Unlock the layer before editing it.');
+    return layer;
+  }
+  do(): void {
+    const layer = this.layer();
+    if (!this.captured) {
+      this.previous = layer.groups;
+      this.captured = true;
+    }
+    this.apply(layer, this.next);
+    this.document.notifyLayerChanged(this.layerId);
+  }
+  undo(): void {
+    this.apply(this.layer(), this.previous);
+    this.document.notifyLayerChanged(this.layerId);
+  }
+}
+
+/**
+ * Lifts a set of splats out of their layer into a new `segment` layer, hiding them in the
  * source. The new layer is re-originned on the splats' centroid so the gizmo sits on the
  * object and rotation spins it about itself; its transform composes with the source's.
  */

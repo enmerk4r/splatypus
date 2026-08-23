@@ -121,6 +121,10 @@ export function createToolbar(
           </div>
         </div>
         <div class="toolbar-rule"></div>
+        <div class="toolbar-group" role="group" aria-label="AI select">
+          ${button('data-tool', 'aiselect', 'AI select (A)', 'click an object; SAM proposes a mask, Alt-click removes a region, Enter commits')}
+        </div>
+        <div class="toolbar-rule"></div>
         <div class="toolbar-group" role="group" aria-label="Brushes">
           ${menuButton('data-brush', 'pen', 'Brush', 'paint on the active layer')}
         </div>
@@ -196,6 +200,7 @@ export function createToolbar(
   const scaleButton = host.querySelector<HTMLButtonElement>('[data-mode="scale"]')!;
   const brushButton = host.querySelector<HTMLButtonElement>('[data-brush]')!;
   const measureButton = host.querySelector<HTMLButtonElement>('[data-tool="measure"]')!;
+  const aiSelectButton = host.querySelector<HTMLButtonElement>('[data-tool="aiselect"]')!;
   const modelButton = host.querySelector<HTMLButtonElement>('[data-model]')!;
   const arrayButton = op('array');
   const cropButton = op('crop');
@@ -350,6 +355,10 @@ export function createToolbar(
         case 'measure':
           text = 'MEASURE · CLICK TWO POINTS · TYPE THE REAL DISTANCE TO SCALE THE LAYER';
           break;
+        case 'aiselect':
+          text =
+            'AI SELECT · CLICK AN OBJECT · ALT-CLICK REMOVES · [ ] OTHER MASKS · ENTER COMMITS · ESC CANCELS';
+          break;
         case 'polyline': {
           const shape = modelSettings.shape.toUpperCase();
           const ortho = modelSettings.orthoActive ? ' · ORTHO' : '';
@@ -431,6 +440,7 @@ export function createToolbar(
     }
     brushButton.setAttribute('aria-pressed', String(isBrush(viewer.tool)));
     measureButton.setAttribute('aria-pressed', String(viewer.tool === 'measure'));
+    aiSelectButton.setAttribute('aria-pressed', String(viewer.tool === 'aiselect'));
     modelButton.setAttribute('aria-pressed', String(viewer.tool === 'polyline'));
     if (scaleButton.disabled || viewer.transformMode !== 'scale') setPopover(scalePopover, false);
     if (arrayButton.disabled) setPopover(arrayPopover, false);
@@ -551,9 +561,13 @@ export function createToolbar(
       closePopovers();
     });
 
-  // ---- measure
+  // ---- measure / AI select
   measureButton.addEventListener('click', () => {
     viewer.setTool('measure');
+    closePopovers();
+  });
+  aiSelectButton.addEventListener('click', () => {
+    viewer.setTool('aiselect');
     closePopovers();
   });
 

@@ -135,7 +135,7 @@ Phase 1 is the only hard gate; after that, phases 3–6 are largely parallelizab
 - **Done when:** remove a floater and recolor a wall with undo.
 
 ### Phase 5 — Segmentation ("this splat is a chair")
-*Tier 2 (voxel connectivity + colour) and the `.groups` sidecar, group selection/hover/overlay, split-to-layer, crop box, solo/floor/array are in `main` — ported from the `segmentation` branch; see [`docs/SEGMENTATION_NOTES.md`](docs/SEGMENTATION_NOTES.md). Remaining: sphere/lasso/flood selection, ML tier.*
+*Tier 2 (voxel connectivity + colour) and the `.groups` sidecar, group selection/hover/overlay, split-to-layer, crop box, solo/floor/array are in `main` — ported from the `segmentation` branch; see [`docs/SEGMENTATION_NOTES.md`](docs/SEGMENTATION_NOTES.md). **Tier 3 (SAM click-to-segment, `A`) is in `main`** — single-view, after ArtisanGS; see [`docs/AI_SELECT_NOTES.md`](docs/AI_SELECT_NOTES.md). Remaining: sphere/lasso/flood selection, multi-view aggregation.*
 Three tiers, cheapest first; each produces a selection mask → *Split to layer* / delete / recolor / transform with `TransformControls`.
 1. **Geometric selection:** sphere / box / screen-space lasso & rect; Set/Add/Remove modifiers (SuperSplat pattern).
 2. **Grow-based:** flood by color similarity; **connectivity** (connected components on the voxel grid with a distance threshold — this alone separates a chair from the floor surprisingly often); floor/plane removal via RANSAC (also gives us the physics ground plane).

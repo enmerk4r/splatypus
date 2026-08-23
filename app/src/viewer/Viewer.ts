@@ -6,11 +6,15 @@ import {
   PerspectiveCamera,
   Scene,
   SRGBColorSpace,
+  Vector2,
   Vector3,
   WebGLRenderer,
+  WebGLRenderTarget,
 } from 'three';
 import type { Object3D } from 'three';
 import { SparkRenderer } from '@sparkjsdev/spark';
+import { downscale, flipRows } from '../ai/framePixels';
+import type { FrameImage } from '../ai/framePixels';
 import type { Document } from '../model/Document';
 import type { ProjectViewState } from '../io/projectFormat';
 import { CameraRig } from './CameraRig';
@@ -32,8 +36,15 @@ export type ToolMode =
   | 'grab'
   | 'inflate'
   | 'measure'
-  | 'polyline';
+  | 'polyline'
+  | 'aiselect';
 export const BRUSH_TOOLS: readonly ToolMode[] = ['recolor', 'fade', 'grab', 'inflate'];
+
+/** A rendered frame, plus what maps a CSS pixel of the canvas onto one of its pixels. */
+export interface CapturedFrame extends FrameImage {
+  scaleX: number;
+  scaleY: number;
+}
 
 export class Viewer extends EventTarget {
   readonly cameraRig: CameraRig;
@@ -184,6 +195,53 @@ export class Viewer extends EventTarget {
   }
 
   /** Render a single frame outside the animation loop (used by the dev console hook). */
+  /**
+   * Renders the splats offscreen and reads them back as an image, with the grid and the
+   * gizmo hidden so nothing but the scene reaches the model.
+   *
+   * The target is allocated at the canvas drawing-buffer size on purpose. A `SparkRenderer`
+   * with no `target` of its own takes its render size from `renderer.getDrawingBufferSize()`
+   * regardless of which framebuffer is bound, so a target of any other size would compute
+   * every splat's pixel radius for the wrong resolution. Downscaling happens afterwards, on
+   * the CPU, where it is only a resampling.
+   *
+   * The canvas has no `preserveDrawingBuffer`, which is why this cannot simply read the
+   * canvas after a frame.
+   */
+  async captureFrame(maxEdge = 1024): Promise<CapturedFrame> {
+    const size = this.renderer.getDrawingBufferSize(new Vector2());
+    const width = Math.max(1, Math.floor(size.x));
+    const height = Math.max(1, Math.floor(size.y));
+    const target = new WebGLRenderTarget(width, height, {
+      colorSpace: SRGBColorSpace,
+      depthBuffer: true,
+    });
+    const raw = new Uint8Array(width * height * 4);
+    const previousTarget = this.renderer.getRenderTarget();
+    const gridWasVisible = this.grid.isVisible;
+    try {
+      this.grid.setVisible(false);
+      this.gizmo.setHelperVisible(false);
+      this.renderer.setRenderTarget(target);
+      this.renderer.render(this.scene, this.cameraValue);
+      await this.renderer.readRenderTargetPixelsAsync(target, 0, 0, width, height, raw);
+    } finally {
+      this.renderer.setRenderTarget(previousTarget);
+      this.grid.setVisible(gridWasVisible);
+      this.gizmo.setHelperVisible(true);
+      target.dispose();
+    }
+
+    const frame = downscale({ data: flipRows(raw, width, height), width, height }, maxEdge);
+    // Pointer events and ScreenIndex both work in CSS pixels; the capture is in device
+    // pixels and may have been downscaled, so hand back the factor between them.
+    return {
+      ...frame,
+      scaleX: frame.width / Math.max(this.canvas.clientWidth, 1),
+      scaleY: frame.height / Math.max(this.canvas.clientHeight, 1),
+    };
+  }
+
   renderOnce(): void {
     this.onFrame(performance.now());
   }

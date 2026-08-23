@@ -88,8 +88,14 @@ export function wireShortcuts(viewer: Viewer, actions: ShortcutActions): () => v
       case 'KeyP':
         if (viewer.cameraRig.mode === 'orbit') viewer.setTool('polyline');
         break;
+      case 'KeyA':
+        if (viewer.cameraRig.mode === 'orbit') viewer.setTool('aiselect');
+        break;
       case 'BracketLeft':
       case 'BracketRight': {
+        // The AI selection tool owns the brackets while it is active: they step through
+        // SAM's alternative masks, and there is no brush to resize.
+        if (viewer.tool === 'aiselect') break;
         event.preventDefault();
         const increase = event.code === 'BracketRight';
         if (event.shiftKey) actions.adjustSketchOpacity(increase ? 0.1 : -0.1);

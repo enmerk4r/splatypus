@@ -1,7 +1,8 @@
 import { Color, Matrix4, Vector3 } from 'three';
 import type { Document } from '../model/Document';
 import type { Layer } from '../model/Layer';
-import { SplitSplats } from '../model/segmentCommands';
+import { SetGroups, SplitSplats } from '../model/segmentCommands';
+import { withAddedGroup } from '../splats/addGroup';
 import { bakeConnectivity, suggestOptions } from '../splats/bakeConnectivity';
 import { GroupMap, UNASSIGNED } from '../splats/groups';
 import type { GroupInfo } from '../splats/groups';
@@ -172,6 +173,45 @@ export class Segmentation extends EventTarget {
     return selected.size;
   }
 
+  /**
+   * Adopts a free set of splat indices as a new group on the layer, and selects it.
+   *
+   * This is where a selection that did not come from a bake enters the model — a SAM mask
+   * lifted to 3D, or any other per-splat set. Once it is a group it behaves like every
+   * other group: click, hover, overlay, split to layer, save, export. Undoable.
+   *
+   * @returns the new group's id, or −1 when there was nothing to add.
+   */
+  selectIndices(
+    layer: Layer,
+    indices: Uint32Array,
+    options: { name: string; source?: string; additive?: boolean },
+  ): number {
+    const document = this.document;
+    if (!document || indices.length === 0) return -1;
+    // Adopting the new map clears the selection, so remember what was held before it does.
+    const held =
+      options.additive && this.selectionValue?.layer === layer
+        ? [...this.selectionValue.groupIds]
+        : [];
+    const next = withAddedGroup(layer.groups, layer.store.count, indices, {
+      name: options.name,
+      source: options.source ?? 'sam',
+    });
+    const newId = next.numGroups - 1;
+    document.history.push(
+      new SetGroups(
+        document,
+        layer.id,
+        next,
+        (target, groups) => this.applyGroups(target, groups),
+        `Select ${options.name}`,
+      ),
+    );
+    this.selectGroups(layer, [...held, newId], false);
+    return newId;
+  }
+
   private selectGroups(layer: Layer, groupIds: readonly number[], additive: boolean): void {
     this.clearHover();
     if (this.selectionValue) this.restore(this.selectionValue.layer, this.selectionValue.indices);
@@ -233,6 +273,27 @@ export class Segmentation extends EventTarget {
     this.outcomeValue = 'none';
     this.repaint(layer);
     this.dispatchEvent(new Event('groups-changed'));
+  }
+
+  /**
+   * Adopts a whole segmentation for a layer as one undo step — for a bake that produces
+   * many groups at once, rather than a single selection.
+   */
+  applyGroupsUndoable(layer: Layer, groups: GroupMap | undefined, label: string): void {
+    const document = this.document;
+    if (!document) {
+      this.applyGroups(layer, groups);
+      return;
+    }
+    document.history.push(
+      new SetGroups(
+        document,
+        layer.id,
+        groups,
+        (target, next) => this.applyGroups(target, next),
+        label,
+      ),
+    );
   }
 
   /** Re-runs the geometric bake over a layer's store and adopts the result. */

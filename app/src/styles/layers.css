@@ -639,6 +639,13 @@
   color: var(--lime);
 }
 
+/* The 2D mask SAM proposed, drawn over the canvas until it is lifted to 3D. */
+.mask-overlay {
+  position: fixed;
+  z-index: 6;
+  pointer-events: none;
+}
+
 .selection-overlay {
   position: fixed;
   inset: 0;
