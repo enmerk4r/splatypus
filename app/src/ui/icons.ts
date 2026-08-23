@@ -50,6 +50,12 @@ const PATHS: Record<string, string> = {
   layers: 'M8 2 14 5.5 8 9 2 5.5ZM2 8.5l6 3.5 6-3.5M2 11.5 8 15l6-3.5',
   segment: 'M2 2h5v5H2zM9 2h5v5H9zM2 9h5v5H2zM9 9h5v5H9z',
   workplane: 'M1 5.5 8 2l7 3.5L8 9zM1 5.5v3L8 12l7-3.5v-3',
+  // The toolbar button is `data-op="plane"`; same glyph as the flyout's show/hide item.
+  plane: 'M1 5.5 8 2l7 3.5L8 9zM1 5.5v3L8 12l7-3.5v-3',
+  planeGround: 'M1.5 8 8 4.5 14.5 8 8 11.5zM8 4.5v7',
+  planeFront: 'M3 3h10v10H3zM3 8h10M8 3v10',
+  planeSide: 'M5 2.5l6 2v9l-6 2zM5 8l6 2',
+  planeView: 'M2.5 3.5h11v9h-11zM8 6.5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3',
   planeMove:
     'M8 1.5 10 4H8.8v3.2H12V6l2.5 2L12 10V8.8H8.8V12H10l-2 2.5L6 12h1.2V8.8H4V10L1.5 8 4 6v1.2h3.2V4H6z',
   planeRotate: 'M8 3a5 5 0 1 1-4.6 3M3 2v3.4h3.4',
