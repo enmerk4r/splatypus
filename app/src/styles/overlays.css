@@ -26,13 +26,11 @@
 }
 
 .toast-region {
-  position: absolute;
-  right: 18px;
-  bottom: 18px;
-  z-index: 12;
   display: grid;
-  width: min(390px, calc(100vw - 36px));
   gap: 8px;
+  width: 100%;
+  min-height: 0;
+  overflow: hidden; /* a tall stack clips at the viewport edge instead of spilling */
 }
 
 .toast {
@@ -43,7 +41,7 @@
   color: #eef4ef;
   background: rgba(18, 27, 16, 0.94);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-  transform: translateY(8px);
+  transform: translateY(-6px);
   transition: 220ms ease;
   font-size: 13px;
 }
@@ -142,7 +140,7 @@
     bottom: 12px;
     width: 220px;
   }
-  .hud {
+  .left-rail {
     top: 12px;
     left: 12px;
     width: 230px;

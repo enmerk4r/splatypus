@@ -392,7 +392,7 @@ select:focus-visible {
 
 /* Keep the landing view focused on opening a scene. Editor panels return as soon as
    AppImports hides the empty state after a document has loaded. */
-.empty-state:not([hidden]) ~ .hud,
+.empty-state:not([hidden]) ~ .left-rail .hud,
 .empty-state:not([hidden]) ~ .right-rail #panel {
   display: none;
 }
