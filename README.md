@@ -282,23 +282,23 @@ Chrome uses the File System Access API; Firefox and Safari fall back to a downlo
 
 ## Controls
 
-| Input                                               | Action                                                                             |
-| --------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Left drag                                           | Orbit in Select; draw / erase / select with a tool active; look around in fly mode |
-| Right drag · Middle drag · `Alt`+left drag          | Pan · Dolly · Orbit while a tool is active                                         |
-| Scroll · Double-click                               | Zoom to cursor (fly: change speed) · Move the orbit target onto the surface        |
-| Click                                               | Select the layer under the cursor — and its group, when the layer is segmented     |
-| `F` · `G` · `1` `3` `7`                             | Frame the scene · Toggle the grid · Front / right / top view                       |
-| `Tab` · `W` `A` `S` `D` · `Q` `E` · `Shift` · `Esc` | Fly mode: toggle · move · down / up · 4× speed · back to orbit                     |
-| `Q` · `W` `E` `R`                                   | Select tool · Move / Rotate / Scale gumball                                        |
-| `S` `X` `C` `D` `V` `I`                             | Sketch · Erase · Recolor · Fade · Grab · Inflate                                   |
-| `M` · `P` · `J` · `K`                               | Measure · Model · AI select · Work plane                                           |
-| `[` `]` · `Shift`+`[` `]`                           | Brush size · Brush opacity (AI select: cycle masks)                                |
-| `O` · `Shift+O`                                     | Open a file · Add files as layers                                                  |
-| `Delete` / `Backspace`                              | Delete selected unlocked layers                                                    |
-| `Ctrl/Cmd+Z` · `Ctrl/Cmd+Shift+Z` / `Ctrl/Cmd+Y`    | Undo · Redo                                                                        |
-| `Ctrl/Cmd+E`                                        | Export                                                                             |
-| `Esc`                                               | Cancel the stroke / shape / selection; close a flyout; leave fly mode              |
+| Input                                               | Action                                                                                                                                                                                     |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Left drag                                           | Orbit in Select; draw / erase / select with a tool active; look around in fly mode                                                                                                         |
+| Right drag · Middle drag · `Alt`+left drag          | Pan · Dolly · Orbit while a tool is active                                                                                                                                                 |
+| Scroll · Double-click                               | Zoom to cursor (fly: change speed) · Move the orbit target onto the surface                                                                                                                |
+| Click                                               | Select the layer under the cursor — and its group, when the layer is segmented                                                                                                             |
+| `F` · `G` · `1` `3` `7`                             | Frame the scene · Toggle the grid · Front / right / top view                                                                                                                               |
+| `Tab` · `W` `A` `S` `D` · `Q` `E` · `Shift` · `Esc` | Fly mode: toggle · move · down / up · 4× speed · back to orbit                                                                                                                             |
+| `Q` · `W` `E` `R`                                   | Select tool · Move / Rotate / Scale gumball                                                                                                                                                |
+| `S` `X` `C` `D` `V` `I`                             | Sketch · Erase · Recolor · Fade · Grab · Inflate                                                                                                                                           |
+| `M` · `P` · `J` · `K`                               | Measure · Model · AI select · Work plane                                                                                                                                                   |
+| `[` `]` · `Shift`+`[` `]`                           | Brush size · Brush opacity (AI select: cycle masks)                                                                                                                                        |
+| `O` · `Shift+O`                                     | Open a file · Add files as layers                                                                                                                                                          |
+| `Delete` / `Backspace`                              | Delete selected unlocked layers                                                                                                                                                            |
+| `Ctrl/Cmd+Z` · `Ctrl/Cmd+Shift+Z` / `Ctrl/Cmd+Y`    | Undo · Redo                                                                                                                                                                                |
+| `Ctrl/Cmd+E`                                        | Export                                                                                                                                                                                     |
+| `Esc`                                               | Back out one level: close a flyout / cancel the crop box → cancel the stroke, outline or measurement → leave the tool (back to Select) → clear the selection; in fly mode, return to orbit |
 
 ## How it is built
 

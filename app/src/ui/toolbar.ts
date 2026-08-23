@@ -449,8 +449,9 @@ export function createToolbar(
     for (const modeButton of modeButtons) {
       const mode = modeButton.dataset.mode;
       if (modeButton === selectButton) {
-        modeButton.disabled =
-          !editable && !allEditable && segmentation.segmentedLayers.length === 0;
+        // Never disabled: Select is how you pick a layer in the first place, and the way
+        // back out of every other tool (a disabled Select stranded you in Sketch).
+        modeButton.disabled = false;
         modeButton.setAttribute('aria-pressed', String(inSelect));
       } else {
         // Gumball modes: nested under Select; multi-selections can only move.
@@ -746,11 +747,18 @@ export function createToolbar(
       arrayButton.focus();
     }
   };
-  /** Escape closes an open flyout before anything else sees the key. */
+  /**
+   * Escape closes an open flyout before anything else sees the key. The crop box is a mode,
+   * not a menu — its controls can be closed while the box stays up (opening another flyout
+   * does that) — so Escape cancels the box itself whenever it is showing.
+   */
   const onKeyDown = (event: KeyboardEvent): void => {
-    if (event.code !== 'Escape' || popovers.every(({ element }) => element.hidden)) return;
+    if (event.code !== 'Escape') return;
+    const flyoutOpen = popovers.some(({ element }) => !element.hidden);
+    if (!flyoutOpen && !crop.isActive) return;
     event.preventDefault();
     event.stopImmediatePropagation();
+    if (crop.isActive) crop.cancel();
     closePopovers();
   };
   const onOutsidePointer = (event: PointerEvent): void => {

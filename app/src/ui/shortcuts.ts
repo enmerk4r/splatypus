@@ -132,10 +132,20 @@ export function wireShortcuts(viewer: Viewer, actions: ShortcutActions): () => v
       case 'KeyR':
         if (viewer.cameraRig.mode === 'orbit') viewer.setTransformMode('scale');
         break;
-      case 'Escape':
-        actions.cancelStroke();
-        if (viewer.cameraRig.mode !== 'fly') viewer.document?.setSelection([]);
+      case 'Escape': {
+        // Back out one level at a time: the stroke / outline / measurement in progress,
+        // then the tool itself (back to Select), then the layer selection. Tools that
+        // want a press for themselves (typed dimensions, an AI prompt) consume it before
+        // this runs. In fly mode the camera rig takes the key.
+        const cancelled = actions.cancelStroke();
+        if (viewer.cameraRig.mode === 'fly' || cancelled) break;
+        if (viewer.tool !== 'select') {
+          viewer.setTool('select');
+          break;
+        }
+        viewer.document?.setSelection([]);
         break;
+      }
       case 'Delete':
       case 'Backspace': {
         const document = viewer.document;

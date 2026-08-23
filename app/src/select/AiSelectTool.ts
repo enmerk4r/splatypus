@@ -390,6 +390,11 @@ export class AiSelectTool extends EventTarget {
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     if (!this.active || event.target !== document.body) return;
     if (event.key === 'Escape') {
+      // One press clears the prompt, the next (nothing left to clear) leaves the tool —
+      // the global Escape handler does that, so only swallow the key when it did work here.
+      if (this.points.length === 0 && !this.hasProposal) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
       this.clearPrompt();
     } else if (event.key === 'Enter' && this.hasProposal) {
       event.preventDefault();
