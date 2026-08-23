@@ -7,6 +7,7 @@ import type { LayerHit } from './picking';
 export class CanvasInteraction {
   private pointerDown?: Vector3;
   private pointerDownShift = false;
+  private pointerDownInSelect = false;
   private hoverPending?: PointerEvent;
   private hoverLeft = false;
   private lastHover?: PointerEvent;
@@ -80,6 +81,7 @@ export class CanvasInteraction {
   private readonly onPointerDown = (event: PointerEvent): void => {
     this.pointerDown = new Vector3(event.clientX, event.clientY, event.button);
     this.pointerDownShift = event.shiftKey;
+    this.pointerDownInSelect = this.viewer.tool === 'select';
   };
 
   /** Capture phase runs before OrbitControls sees the pointer-down. */
@@ -104,11 +106,16 @@ export class CanvasInteraction {
   private readonly onPointerUp = (event: PointerEvent): void => {
     const start = this.pointerDown;
     const additive = event.shiftKey || this.pointerDownShift;
+    const startedInSelect = this.pointerDownInSelect;
     this.pointerDown = undefined;
     this.pointerDownShift = false;
+    this.pointerDownInSelect = false;
     const document = this.viewer.document;
+    // A tool that finishes on pointer-down (e.g. the outline tool creating a face) may switch
+    // to Select before this pointer-up: that click belongs to the tool, not to selection.
     if (
       !start ||
+      !startedInSelect ||
       !document ||
       event.button !== 0 ||
       event.ctrlKey ||

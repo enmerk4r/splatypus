@@ -19,6 +19,7 @@ import { LayerGizmo } from './LayerGizmo';
 import type { TransformMode } from './LayerGizmo';
 import { GridFloor } from './GridFloor';
 import { CanvasInteraction } from './CanvasInteraction';
+import { setLineResolution } from './highlight';
 
 export class WebGLUnavailableError extends Error {}
 export type UpAxis = 'y-down' | 'y-up' | 'z-up';
@@ -158,6 +159,8 @@ export class Viewer extends EventTarget {
     this.scene.add(document.root);
     this.gizmo.setDocument(document);
     document.addEventListener('layers-changed', this.onLayersChanged);
+    document.addEventListener('selection-changed', this.syncSelectionCues);
+    this.syncSelectionCues();
     const bounds = document.getRobustBounds();
     this.fitGrid(bounds.radius);
     if (frame) this.cameraRig.frame(bounds);
@@ -168,6 +171,7 @@ export class Viewer extends EventTarget {
     const document = this.documentValue;
     if (!document) return;
     document.removeEventListener('layers-changed', this.onLayersChanged);
+    document.removeEventListener('selection-changed', this.syncSelectionCues);
     this.gizmo.setDocument();
     this.scene.remove(document.root);
     document.dispose();
@@ -317,12 +321,21 @@ export class Viewer extends EventTarget {
   // Only structural changes (add/merge/delete) can change the scene extent; moving a layer never moves the grid.
   private readonly onLayersChanged = (): void => {
     if (this.documentValue) this.fitGrid(this.documentValue.getRobustBounds().radius);
+    this.syncSelectionCues();
+  };
+
+  /** Draw every layer with or without its selection cue to match the document selection. */
+  private readonly syncSelectionCues = (): void => {
+    const document = this.documentValue;
+    if (!document) return;
+    for (const layer of document.layers) layer.setSelected(document.selection.has(layer.id));
   };
 
   private readonly resize = (): void => {
     const width = Math.max(this.canvas.clientWidth, 1),
       height = Math.max(this.canvas.clientHeight, 1);
     this.renderer.setSize(width, height, false);
+    setLineResolution(width, height);
     this.cameraValue.aspect = width / height;
     this.cameraValue.updateProjectionMatrix();
   };

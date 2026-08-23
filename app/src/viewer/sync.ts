@@ -3,6 +3,7 @@ import type { PackedSplats } from '@sparkjsdev/spark';
 import type { Layer } from '../model/Layer';
 import { shCoefficients } from '../model/SplatStore';
 import type { SplatStore } from '../model/SplatStore';
+import { selectionModifier } from './highlight';
 
 export const LOD_ABOVE_SPLATS = 1_500_000;
 
@@ -58,6 +59,8 @@ export async function syncLayer(layer: Layer): Promise<number> {
   const mesh = new SplatMesh({
     maxSplats: live,
     raycastable: true,
+    // Selection tint/brightness, driven by the layer's `highlight` uniform (no rebuild to toggle).
+    objectModifier: selectionModifier(layer.highlight),
     constructSplats: (splats) => {
       const packed = splats.ensureSplats(live);
       let packedIndex = 0;

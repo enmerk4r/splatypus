@@ -195,6 +195,10 @@ face extrudes sideways. The result is a capped **mesh layer** — moved, rotated
 Meshes are stored as meshes in the Splatypus project and sampled into flat gaussians when you
 export a PLY or merge into a splat layer. Details: [docs/MESH_NOTES.md](docs/MESH_NOTES.md).
 
+Selected layers are easy to spot: a selected mesh draws thick glowing lime edges, and a selected
+splat layer is nudged slightly towards lime and brightened (a per-layer shader uniform, so it
+costs nothing and the detail stays legible); both revert the moment the layer is deselected.
+
 ## Export
 
 Use **EXPORT** in the HUD or `Ctrl/Cmd+E`. Choose **Export Project** to write an editable `.splatypus` project containing the layer stack, transforms, visibility and lock state, live/deleted splats, segmentation groups, sketch strokes, selection, and camera/view state. Opening that file restores the editing workspace; undo/redo history starts empty.

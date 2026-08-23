@@ -67,6 +67,19 @@ Drawing and extruding are separate steps.
    the object transform like any layer. The gizmo shows the angle / factor / distance while
    dragging (`LayerGizmo.onReadout` → `gizmo-readout` → overlay badge).
 
+## Selection cues
+
+`Viewer.syncSelectionCues` mirrors the document selection onto `Layer.setSelected`. Meshes:
+the edge lines are rebuilt as two `LineSegments2` (three `LineMaterial`, pixel widths — a
+10 px translucent accent halo under a 3 px core) instead of the thin `LineSegments`; the
+materials share `viewer/highlight.ts`'s `lineResolution` vector, updated on resize. Splats:
+every layer's `SplatMesh` is built with `objectModifier: selectionModifier(layer.highlight)`
+(`viewer/sync.ts`) — a dyno block that does `rgb = mix(rgb, accent, 0.1·t) · (1 + 0.12·t)`
+with `t` the layer's `highlight` uniform (0/1), so selecting only sets a uniform and bumps
+the mesh version; no rebuild, no extra pass. A true silhouette outline around splats would
+need a per-layer mask + edge-detect pass (Spark renders all layers in one accumulator), so
+the tint was chosen instead.
+
 ## Not yet
 
 Editing an existing outline/height after extruding (the source is stored for that),
