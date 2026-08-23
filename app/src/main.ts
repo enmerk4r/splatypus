@@ -8,6 +8,7 @@ import type { SplatSource } from './io/loadSplat';
 import { getInitialSource } from './io/urlParams';
 import { CropBox } from './select/CropBox';
 import { Segmentation } from './select/Segmentation';
+import { RegionSettingsStore } from './select/regionSettings';
 import { GroupMapError } from './splats/groups';
 import { SketchSettingsStore } from './sketch/settings';
 import { SketchOverlay } from './sketch/SketchOverlay';
@@ -23,6 +24,7 @@ import { createHoverLabel } from './ui/hoverLabel';
 import { Hud } from './ui/hud';
 import { createLayersPanel } from './ui/layersPanel';
 import { createPanel } from './ui/panel';
+import { createRegionPanel } from './ui/regionPanel';
 import { createSegmentPanel } from './ui/segmentPanel';
 import { createSketchPanel } from './ui/sketchPanel';
 import { createToolbar } from './ui/toolbar';
@@ -67,6 +69,7 @@ async function bootstrap(): Promise<void> {
   const flyHint = element('fly-hint');
   const imports = new AppImports(viewer, hud, emptyState);
   const segmentation = new Segmentation(viewer);
+  const regionSettings = new RegionSettingsStore();
   const crop = new CropBox(viewer);
   const sketchSettings = new SketchSettingsStore();
   const sketchOverlay = new SketchOverlay(
@@ -187,12 +190,19 @@ async function bootstrap(): Promise<void> {
     onAdd: () => addInput.click(),
     notify: (message, level) => hud.toast(message, level),
   });
+  const regionPanel = createRegionPanel(
+    viewer,
+    segmentation,
+    regionSettings,
+    element('region-panel'),
+    { notify: (message, level) => hud.toast(message, level) },
+  );
   const segmentPanel = createSegmentPanel(viewer, segmentation, element('segment-panel'), {
     notify: (message, level) => hud.toast(message, level),
   });
   const sketchPanel = createSketchPanel(viewer, sketchSettings, element('sketch-panel'));
   const hoverLabel = createHoverLabel(element('hover-label'), segmentation);
-  const toolbar = createToolbar(viewer, segmentation, crop, element('toolbar'), {
+  const toolbar = createToolbar(viewer, segmentation, crop, regionSettings, element('toolbar'), {
     notify: (message, level) => hud.toast(message, level),
   });
   const exportDialog = createExportDialog(
@@ -269,6 +279,8 @@ async function bootstrap(): Promise<void> {
       viewer,
       imports,
       segmentation,
+      regionSettings,
+      regionTool: toolbar.regionTool,
       crop,
       sketchTool,
       sketchSettings,
@@ -286,6 +298,7 @@ async function bootstrap(): Promise<void> {
       disposeShortcuts();
       panel.dispose();
       layersPanel.dispose();
+      regionPanel.dispose();
       segmentPanel.dispose();
       sketchPanel.dispose();
       hoverLabel.dispose();

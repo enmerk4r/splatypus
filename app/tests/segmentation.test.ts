@@ -81,6 +81,28 @@ describe('connectivity bake', () => {
     expect(ids[0]).not.toBe(ids[8]);
     expect(ids[16]).toBe(UNASSIGNED);
   });
+
+  it('groups matching colours across disconnected positions when spatial connectivity is off', () => {
+    const store = clusters();
+    const colours = store.colors.slice();
+    for (let index = 0; index < 16; index += 1) colours.set([0.2, 0.4, 0.6], index * 3);
+    const { ids, groups } = bakeConnectivity(
+      {
+        count: store.count,
+        centres: store.centers,
+        colours,
+        opacities: store.opacities,
+      },
+      {
+        ...suggestOptions(store.centers, store.count),
+        spatialConnectivity: false,
+        minSplats: 2,
+      },
+    );
+    expect(groups).toHaveLength(1);
+    expect(new Set([...ids.subarray(0, 16)]).size).toBe(1);
+    expect(ids[16]).toBe(UNASSIGNED);
+  });
 });
 
 describe('VoxelGrid', () => {

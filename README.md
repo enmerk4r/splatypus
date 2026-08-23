@@ -79,6 +79,38 @@ The transform gizmo appears when exactly one unlocked layer is selected. In scal
 
 The right-hand panels (VIEW, LAYERS, SEGMENT) collapse from their headers; the state is remembered per browser. Notifications are colour-coded: lime = info, yellow = warning, amber = error.
 
+## Region selection
+
+Draw over the object and get *those splats* — no bake involved. Pick a method under **Select**
+in the bottom toolbar: **Magic wand**, **Rectangle**, **Lasso**, **Polygon** (click corners,
+double-click or Enter to close) or **Selection brush**. **Shift** adds to the selection,
+**Alt** removes; `Esc` cancels the shape, or clears the selection when there is none in progress.
+
+Each method is **one-shot**: as soon as a selection lands the tool hands the pointer back, so
+the next drag orbits the camera instead of starting another shape. A click that selects nothing
+leaves the tool armed.
+
+Two things run behind every gesture, both in the **SELECT** panel:
+
+- **Depth gate** — keeps only the splats on the front surface under the shape, so a lasso does
+  not also grab the wall behind the object. **Depth** sets how deep the window reaches.
+  (On the sample scene this is the difference between 116 k and 72 k splats for the same lasso.)
+- **Snap to edges** — lets the boundary settle onto a real edge in the cloud instead of the line
+  the hand drew: splats well inside the shape and well outside it compete across the uncertain
+  **Band**, along a path that pays to cross a colour change (**Colour** sets how much).
+
+The **Magic wand** skips the tracing entirely — click the object and the selection grows out to
+its edges; **Wand** is the budget it has to spend.
+
+Then clean the selection up: **Grow** / **Shrink** by one splat's spacing, **Clean up** to drop
+small disconnected pieces, **Keep largest** for just the biggest one, the **Selection brush**
+(Alt) to rub out what is left over. **Split to layer** lifts it into its own layer, where the
+eraser (`X`) and the edit brushes take over. Everything is one undo step.
+
+The smart tools index the layer the first time they are used (~0.6 s per 250 k splats, announced
+by a toast, then cached) and decline above 600 k live splats. Details and measurements:
+[docs/REGION_SELECT_NOTES.md](docs/REGION_SELECT_NOTES.md).
+
 ## Segmentation and object tools
 
 Segmentation is per layer and index-aligned with the layer's splats. It comes from either a
@@ -89,9 +121,22 @@ built-in geometric bake:
 node tools/bake-connectivity.mjs scan.ply scan.groups     # offline, tunable (--voxel --colour --slack --min --opacity)
 ```
 
-In the app, the **SEGMENT** panel runs the same bake on the active layer (**Segment by**
-colour + position / position only, **Detail** 1–5), and **Show labels** paints every group in its
-own colour (grey = unassigned) with a **Blend** slider. `scan.groups` next to a `?url=`-loaded
+In the app, the **SEGMENT** panel runs a bake on the active layer and **Show segmentation**
+paints every group in its own flat colour, with a **Blend** slider. **Segment by** picks how:
+
+- **Surface patches** (default) — *partitions* the layer by walking the same colour-aware
+  neighbour graph the selection tools use, from seeds spread evenly through the cloud. Every
+  splat lands in a patch, so the overlay reads as a real segmentation mask: on the butterfly,
+  185 patches at Detail 2 covering **99.8 %**, in ~0.2 s once the layer is indexed.
+- **Colour + position** / **Colour only** / **Position only** — the connectivity bake, which
+  looks for cells that *match* rather than partitioning, so most splats end up in no group at
+  all (55 groups, **11.7 %** covered on the same scene). Still the right tool when you want only
+  the confidently-uniform regions, and the only one that works above the 600 k graph limit.
+
+**Detail** sets the patch count (30 → 3000) for Surface patches, and the cell size for the
+others. The overlay works while you are selecting: with a region selected everything outside it
+is dimmed, so the selection reads against the mask and you can see the patch borders you are
+trying to follow. `scan.groups` next to a `?url=`-loaded
 `scan.ply` loads automatically; `?groups=<encoded-url>` names one explicitly; dropping a
 `.groups` file attaches it to the active (or only) layer — it must cover exactly that layer's
 splat count.

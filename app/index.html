@@ -17,19 +17,26 @@
       <canvas id="sketch-overlay" class="sketch-overlay" aria-hidden="true"></canvas>
 
       <section id="empty-state" class="empty-state" aria-labelledby="empty-title">
-        <img class="empty-logo" src="./logo.svg" alt="" />
-        <h1 id="empty-title" class="wordmark">SPLATYPUS</h1>
-        <p class="tagline">NOOBS REDLINE DRAWINGS. PROS REDLINE REALITY</p>
-        <div class="empty-actions">
-          <button id="open-file" class="primary" type="button">Open a file</button>
-          <label class="sample-picker">
-            <span class="sr-only">Pick a sample</span>
-            <select id="sample-select" aria-label="Pick a sample">
-              <option value="">Pick a sample…</option>
-            </select>
-          </label>
+        <div class="empty-logo-stage" aria-hidden="true">
+          <span class="empty-logo-ball"></span>
+          <span class="empty-logo-impact"></span>
+          <span class="empty-logo-burst"></span>
+          <img class="empty-logo" src="./logo.svg" alt="" />
         </div>
-        <p class="formats">PLY · COMPRESSED.PLY · SPZ · SPLAT · KSPLAT · SOG</p>
+        <div class="empty-content">
+          <h1 id="empty-title" class="wordmark">SPLATYPUS</h1>
+          <p class="tagline">NOOBS REDLINE DRAWINGS. PROS REDLINE REALITY</p>
+          <div class="empty-actions">
+            <button id="open-file" class="primary" type="button">Open a file</button>
+            <label class="sample-picker">
+              <span class="sr-only">Pick a sample</span>
+              <select id="sample-select" aria-label="Pick a sample">
+                <option value="">Pick a sample…</option>
+              </select>
+            </label>
+          </div>
+          <p class="formats">PLY · COMPRESSED.PLY · SPZ · SPLAT · KSPLAT · SOG</p>
+        </div>
       </section>
 
       <input
@@ -47,9 +54,9 @@
       />
 
       <aside id="hud" class="hud" aria-live="polite">
-        <div class="brand">
+        <a class="brand" href="./" aria-label="Back to Splatypus home">
           <img class="brand-mark" src="./logo.svg" alt="" /><span>SPLATYPUS</span>
-        </div>
+        </a>
         <dl>
           <div>
             <dt>FPS</dt>
@@ -81,6 +88,12 @@
       <div class="right-rail">
         <div id="panel" class="panel-host"></div>
         <aside id="layers-panel" class="layers-panel" aria-label="Layers" hidden></aside>
+        <aside
+          id="region-panel"
+          class="layers-panel segment-panel"
+          aria-label="Region selection"
+          hidden
+        ></aside>
         <aside
           id="segment-panel"
           class="layers-panel segment-panel"

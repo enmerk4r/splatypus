@@ -71,36 +71,258 @@ select:focus-visible {
   flex-direction: column;
   align-items: center;
   text-align: center;
+  perspective: 900px;
   pointer-events: none;
   transition: opacity 180ms ease;
+  animation: landing-impact-shake 1420ms linear both;
 }
 
 .empty-state.loading {
   opacity: 0.38;
 }
 
-.empty-logo {
+.empty-logo-stage {
+  position: relative;
   width: clamp(128px, 20vw, 208px);
-  height: auto;
+  aspect-ratio: 389.46 / 344.31;
   margin-bottom: 26px;
-  filter: drop-shadow(0 0 28px rgba(184, 243, 74, 0.28));
-  animation: logo-in 700ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
-@keyframes logo-in {
-  from {
+.empty-logo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 0 38px rgba(184, 243, 74, 0.42));
+  transform-origin: 50% 78%;
+  animation: logo-splash-in 1420ms cubic-bezier(0.17, 0.84, 0.2, 1) both;
+}
+
+.empty-content {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  transform-origin: 50% 0;
+  animation: landing-content-from-back 1420ms cubic-bezier(0.17, 0.84, 0.2, 1) both;
+}
+
+.empty-logo-ball {
+  position: absolute;
+  z-index: 1;
+  top: 76%;
+  left: 50%;
+  width: clamp(30px, 4.2vw, 46px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--lime);
+  box-shadow:
+    0 0 16px rgba(184, 243, 74, 0.9),
+    0 0 42px rgba(184, 243, 74, 0.52);
+  animation: logo-ball-impact 1420ms cubic-bezier(0.42, 0.02, 0.76, 0.44) both;
+}
+
+.empty-logo-impact {
+  position: absolute;
+  z-index: 2;
+  top: 76%;
+  left: 50%;
+  width: 16%;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--lime);
+  box-shadow:
+    0 0 22px rgba(184, 243, 74, 0.9),
+    0 0 52px rgba(184, 243, 74, 0.55);
+  animation: logo-impact-ripple 1420ms ease-out both;
+}
+
+.empty-logo-burst {
+  position: absolute;
+  z-index: 3;
+  top: 76%;
+  left: 50%;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow:
+    -118px -22px 0 2px var(--lime),
+    -94px -78px 0 1px var(--lime),
+    -48px -112px 0 3px var(--lime),
+    32px -122px 0 1px var(--lime),
+    86px -82px 0 3px var(--lime),
+    126px -26px 0 1px var(--lime),
+    -132px 20px 0 1px var(--lime),
+    136px 16px 0 2px var(--lime);
+  animation: logo-particle-burst 1420ms cubic-bezier(0.16, 0.76, 0.25, 1) both;
+}
+
+@keyframes logo-ball-impact {
+  0% {
     opacity: 0;
-    transform: translateY(6px) scale(0.96);
+    filter: blur(7px);
+    transform: translate3d(-50%, -50%, -700px) scale(0.04);
   }
-  to {
+  8% {
     opacity: 1;
+  }
+  42% {
+    opacity: 1;
+    filter: blur(4px);
+    transform: translate3d(-50%, -50%, -360px) scale(0.2);
+  }
+  55% {
+    opacity: 1;
+    filter: blur(0);
+    transform: translate3d(-50%, -50%, -70px) scale(0.78);
+  }
+  59% {
+    opacity: 1;
+    filter: blur(0);
+    transform: translate3d(-50%, -50%, 40px) scale(1.18);
+  }
+  61% {
+    opacity: 0;
+    filter: blur(1px);
+    transform: translate3d(-50%, -50%, 90px) scale(1.45);
+  }
+  62%,
+  100% {
+    opacity: 0;
+    transform: translate3d(-50%, -50%, 90px) scale(1.45);
+  }
+}
+
+@keyframes logo-impact-ripple {
+  0%,
+  57% {
+    opacity: 0;
+    transform: translateX(-50%) scaleX(0.08);
+  }
+  61% {
+    opacity: 1;
+  }
+  78%,
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) scaleX(10);
+  }
+}
+
+@keyframes logo-particle-burst {
+  0%,
+  58% {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(-8deg) scale(0.05);
+  }
+  62% {
+    opacity: 1;
+  }
+  83%,
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(10deg) scale(1.32);
+  }
+}
+
+@keyframes logo-splash-in {
+  0%,
+  59% {
+    opacity: 0;
+    filter: blur(12px);
+    transform: translate3d(0, 8%, -720px) rotate(-4deg) scale(0.08);
+  }
+  65% {
+    opacity: 1;
+    filter: blur(2px);
+    transform: translate3d(0, 4%, -120px) rotate(-2deg) scale(0.72);
+  }
+  75% {
+    opacity: 1;
+    filter: blur(0);
+    transform: translate3d(0, -5%, 85px) rotate(1deg) scale(1.32, 1.16);
+  }
+  85% {
+    opacity: 1;
+    filter: blur(0);
+    transform: translate3d(0, 2%, -22px) rotate(-0.5deg) scale(0.91, 0.96);
+  }
+  93% {
+    opacity: 1;
+    filter: blur(0);
+    transform: translate3d(0, -1%, 12px) scale(1.05, 1.03);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0);
     transform: none;
   }
 }
 
+@keyframes landing-content-from-back {
+  0%,
+  60% {
+    opacity: 0;
+    filter: blur(12px);
+    transform: translate3d(0, -22px, -680px) scale(0.38);
+  }
+  69% {
+    opacity: 0.72;
+    filter: blur(3px);
+    transform: translate3d(0, -10px, -90px) scale(0.82);
+  }
+  78% {
+    opacity: 1;
+    filter: blur(0);
+    transform: translate3d(0, 4px, 70px) scale(1.08);
+  }
+  88% {
+    opacity: 1;
+    filter: blur(0);
+    transform: translate3d(0, -2px, -18px) scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0);
+    transform: none;
+  }
+}
+
+@keyframes landing-impact-shake {
+  0%,
+  58%,
+  100% {
+    margin: 0;
+  }
+  60% {
+    margin-left: -7px;
+    margin-top: 3px;
+  }
+  62% {
+    margin-left: 6px;
+    margin-top: -2px;
+  }
+  64% {
+    margin-left: -3px;
+    margin-top: 1px;
+  }
+  67% {
+    margin: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .empty-logo {
+  .empty-state,
+  .empty-logo,
+  .empty-content {
     animation: none;
+  }
+
+  .empty-logo-ball,
+  .empty-logo-impact,
+  .empty-logo-burst {
+    display: none;
   }
 }
 
@@ -136,12 +358,14 @@ select:focus-visible {
 }
 .empty-actions {
   display: flex;
+  align-items: center;
   gap: 10px;
   pointer-events: auto;
 }
 
 .primary,
 .sample-picker select {
+  height: 46px;
   min-height: 46px;
   border: 1px solid var(--line);
   border-radius: 4px;
@@ -164,6 +388,13 @@ select:focus-visible {
   min-width: 180px;
   color: #e6ece7;
   background: rgba(23, 27, 25, 0.92);
+}
+
+/* Keep the landing view focused on opening a scene. Editor panels return as soon as
+   AppImports hides the empty state after a document has loaded. */
+.empty-state:not([hidden]) ~ .hud,
+.empty-state:not([hidden]) ~ .right-rail #panel {
+  display: none;
 }
 
 .empty-state .formats {

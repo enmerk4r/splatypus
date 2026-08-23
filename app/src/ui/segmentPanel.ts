@@ -24,13 +24,15 @@ export function createSegmentPanel(
       <div class="segment-row">
         <label for="segment-basis">By</label>
         <select id="segment-basis">
+          <option value="patches">Surface patches</option>
           <option value="colour">Colour + position</option>
+          <option value="colour-only">Colour only</option>
           <option value="position">Position only</option>
         </select>
       </div>
       <div class="segment-row">
         <label for="segment-detail">Detail</label>
-        <input type="range" id="segment-detail" min="1" max="5" step="1" value="4" />
+        <input type="range" id="segment-detail" min="0" max="5" step="1" value="4" />
       </div>
       <div class="segment-actions">
         <button type="button" id="segment-rebake">Segment</button>
@@ -38,7 +40,7 @@ export function createSegmentPanel(
       </div>
       <div class="segment-row">
         <label for="segment-blend">Blend</label>
-        <input type="range" id="segment-blend" min="0" max="100" step="5" value="85" />
+        <input type="range" id="segment-blend" min="0" max="100" step="5" value="100" />
       </div>
       <p class="segment-status" id="segment-status"></p>
       <div class="segment-actions">

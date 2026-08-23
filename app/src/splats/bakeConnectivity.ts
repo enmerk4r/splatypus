@@ -30,6 +30,8 @@ export interface BakeInput {
 export interface BakeOptions {
   /** Spatial cell size in scene units. */
   voxelSize: number;
+  /** Whether equal-colour cells must also touch in space. False groups by colour alone. */
+  spatialConnectivity?: boolean;
   /** Colour cell size in 0..1. Zero disables the colour constraint entirely. */
   colourSize: number;
   /** How many colour cells apart two cells may be and still join. Above 0, a smooth
@@ -75,7 +77,14 @@ export function suggestOptions(centres: Float32Array, count: number): BakeOption
 export function bakeConnectivity(input: BakeInput, options: BakeOptions): BakeResult {
   const started = Date.now();
   const { count, centres, colours, opacities } = input;
-  const { voxelSize, colourSize, colourSlack, minSplats, minOpacity } = options;
+  const {
+    voxelSize,
+    spatialConnectivity = true,
+    colourSize,
+    colourSlack,
+    minSplats,
+    minOpacity,
+  } = options;
 
   const invVoxel = 1 / voxelSize;
   const invColour = colourSize > 0 ? 1 / colourSize : 0;
@@ -85,10 +94,11 @@ export function bakeConnectivity(input: BakeInput, options: BakeOptions): BakeRe
   const cells = new Map<string, Map<string, number[]>>();
   for (let i = 0; i < count; i += 1) {
     if (opacities[i]! < minOpacity) continue;
-    const voxelKey =
-      `${Math.floor(centres[i * 3]! * invVoxel)},` +
-      `${Math.floor(centres[i * 3 + 1]! * invVoxel)},` +
-      `${Math.floor(centres[i * 3 + 2]! * invVoxel)}`;
+    const voxelKey = spatialConnectivity
+      ? `${Math.floor(centres[i * 3]! * invVoxel)},` +
+        `${Math.floor(centres[i * 3 + 1]! * invVoxel)},` +
+        `${Math.floor(centres[i * 3 + 2]! * invVoxel)}`
+      : '0,0,0';
     let byColour = cells.get(voxelKey);
     if (!byColour) {
       byColour = new Map<string, number[]>();
