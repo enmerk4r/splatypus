@@ -18,16 +18,27 @@ function write(key: string, value: string): void {
   }
 }
 
-/** Modelling settings: outline shape, polygon sides, ortho drawing, last extrusion height. */
+/** Rotation snap used by ortho mode (radians). */
+export const ORTHO_ROTATION_STEP = Math.PI / 12; // 15°
+
+/**
+ * Modelling settings: outline shape, polygon sides, ortho mode, last extrusion height.
+ * Ortho constrains polyline segments to the axes and snaps gizmo rotations to 15° steps;
+ * holding Shift inverts it while held (`orthoActive`).
+ */
 export class ModelSettingsStore extends EventTarget {
   shape: ShapeMode = 'polyline';
   sides = 6;
-  /** Only axis-aligned segments while drawing (Shift toggles temporarily). */
+  /** Ortho mode as set in the panel (Shift inverts it temporarily). */
   ortho = false;
   height = 0.3;
+  private shiftHeld = false;
 
   constructor() {
     super();
+    window.addEventListener('keydown', this.onKey);
+    window.addEventListener('keyup', this.onKey);
+    window.addEventListener('blur', this.onBlur);
     const shape = read('shape') as ShapeMode | null;
     if (shape && SHAPES.includes(shape)) this.shape = shape;
     const sides = Number(read('sides'));
@@ -36,6 +47,31 @@ export class ModelSettingsStore extends EventTarget {
     const height = Number(read('height'));
     if (Number.isFinite(height) && height !== 0 && read('height') !== null) this.height = height;
   }
+
+  /** Ortho as it applies right now: the setting, inverted while Shift is held. */
+  get orthoActive(): boolean {
+    return this.ortho !== this.shiftHeld;
+  }
+
+  dispose(): void {
+    window.removeEventListener('keydown', this.onKey);
+    window.removeEventListener('keyup', this.onKey);
+    window.removeEventListener('blur', this.onBlur);
+  }
+
+  private readonly onKey = (event: KeyboardEvent): void => {
+    const held =
+      event.type === 'keydown' ? event.shiftKey || event.key === 'Shift' : event.shiftKey;
+    if (held === this.shiftHeld) return;
+    this.shiftHeld = held;
+    this.dispatchEvent(new Event('settings-changed'));
+  };
+
+  private readonly onBlur = (): void => {
+    if (!this.shiftHeld) return;
+    this.shiftHeld = false;
+    this.dispatchEvent(new Event('settings-changed'));
+  };
 
   setShape(value: ShapeMode): void {
     this.shape = value;

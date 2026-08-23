@@ -85,6 +85,9 @@ export class Viewer extends EventTarget {
     this.scene.add(key);
     this.cameraRig = new CameraRig(this.cameraValue, canvas);
     this.gizmo = new LayerGizmo(this.scene, this.cameraValue, canvas, this.cameraRig);
+    this.gizmo.onReadout = (readout): void => {
+      this.dispatchEvent(new CustomEvent('gizmo-readout', { detail: readout }));
+    };
     this.grid = new GridFloor(this.scene);
     this.grid.reset(new Vector3(), 1, 0);
     this.interactions = new CanvasInteraction(this, () => this.interacting);
@@ -189,6 +192,10 @@ export class Viewer extends EventTarget {
   setTransformMode(mode: TransformMode): void {
     this.gizmo.setMode(mode);
     this.dispatchEvent(new Event('transform-mode-changed'));
+  }
+  /** Gizmo rotations snap to multiples of `radians` (null = free). */
+  setRotationSnap(radians: number | null): void {
+    this.gizmo.setRotationSnap(radians);
   }
   get transformMode(): TransformMode {
     return this.gizmo.mode;

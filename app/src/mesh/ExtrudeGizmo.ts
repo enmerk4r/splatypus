@@ -14,7 +14,7 @@ import { SetSolid } from '../model/meshCommands';
 import type { ToastLevel } from '../ui/hud';
 import { eventPointer } from '../viewer/picking';
 import type { Viewer } from '../viewer/Viewer';
-import { extrudeFace, faceCentroid } from './solid';
+import { extrudeFace, faceCentroid, makeFace, pendingExtrusion } from './solid';
 import type { FaceData, SolidData } from './solid';
 
 export interface ExtrudeGizmoOptions {
@@ -23,12 +23,19 @@ export interface ExtrudeGizmoOptions {
 
 const UP = new Vector3(0, 1, 0);
 
+function formatHeight(height: number): string {
+  return `${height >= 0 ? '+' : '−'}${Math.abs(height).toFixed(3)} m`;
+}
+
 /**
- * An arrow sprouting from the centroid of the selected **face** along its normal. Drag the
- * head to extrude by eye (live preview, committed on release as one undo step); the MODEL
- * panel's height field does the same numerically. Extrusions are always along the face
- * normal, so rotate the face first to extrude sideways.
- * Events: `target-changed`, `preview` ({height} while dragging, {height: undefined} after).
+ * An arrow on the selected **face** along its normal, sitting on the face (or on top of its
+ * pending extrusion). Drag it to pull the extrusion by eye — as often as you like; every pull
+ * is an undoable step that leaves the face *unconfirmed* (translucent, `faceHeight` set) —
+ * or set a height numerically from the MODEL panel. **Confirm** turns it into a final mesh;
+ * **Reset** flattens it again. Extrusions are always along the face normal, so rotate the
+ * face first to extrude sideways.
+ * Events: `target-changed` (attached face / pending height changed),
+ * `preview` ({height} while dragging, {height: undefined} after).
  */
 export class ExtrudeGizmo extends EventTarget {
   private readonly group = new Group();
@@ -41,6 +48,7 @@ export class ExtrudeGizmo extends EventTarget {
     origin: Vector3;
     axis: Vector3;
     startOffset: number;
+    startHeight: number;
     height: number;
     original: SolidData;
   };
@@ -69,6 +77,7 @@ export class ExtrudeGizmo extends EventTarget {
     viewer.canvasElement.addEventListener('pointermove', this.onPointerMove, true);
     viewer.canvasElement.addEventListener('pointerup', this.onPointerUp, true);
     viewer.canvasElement.addEventListener('pointercancel', this.onPointerUp, true);
+    window.addEventListener('keydown', this.onKeyDown);
     viewer.addInteractionGuard(() => this.drag !== undefined);
     this.onDocumentChanged();
   }
@@ -78,22 +87,71 @@ export class ExtrudeGizmo extends EventTarget {
     return this.layer;
   }
 
+  /** Pending (unconfirmed) extrusion height of the attached face; 0 when it is still flat. */
+  get height(): number {
+    return this.layer?.solid?.faceHeight ?? 0;
+  }
+
   get isDragging(): boolean {
     return this.drag !== undefined;
   }
 
-  /** Extrudes the attached face numerically (same command as a drag). */
-  extrudeBy(height: number): boolean {
+  /** Sets the pending extrusion height numerically (one undo step; nothing is confirmed yet). */
+  setHeight(height: number): boolean {
     const document = this.document;
     const layer = this.layer;
     const face = this.face;
     if (!document || !layer || !face) return false;
-    if (!Number.isFinite(height) || Math.abs(height) < 1e-6) {
-      this.options.notify('Enter a non-zero height.', 'warning');
+    if (!Number.isFinite(height)) {
+      this.options.notify('Enter a height in metres.', 'warning');
       return false;
     }
-    this.commit(document, layer, face, height);
-    return true;
+    if (Math.abs(height - this.height) < 1e-9) return true;
+    return this.push(
+      document,
+      layer,
+      { ...pendingExtrusion(face, height), colour: this.colour(layer) },
+      `Pull ${layer.name} to ${formatHeight(height)}`,
+    );
+  }
+
+  /** Turns the pending extrusion into a final mesh (the arrow goes away). */
+  confirm(): boolean {
+    const document = this.document;
+    const layer = this.layer;
+    const face = this.face;
+    if (!document || !layer || !face) return false;
+    const height = this.height;
+    if (Math.abs(height) < 1e-6) {
+      this.options.notify('Pull the arrow or enter a height before confirming.', 'warning');
+      return false;
+    }
+    const done = this.push(
+      document,
+      layer,
+      { ...extrudeFace(face, height), colour: this.colour(layer) },
+      `Extrude ${layer.name} ${formatHeight(height)}`,
+    );
+    if (done)
+      this.options.notify(
+        `Extruded “${layer.name}” by ${Math.abs(height).toFixed(3)} m along its normal.`,
+      );
+    return done;
+  }
+
+  /** Drops the pending extrusion: back to the flat face. */
+  reset(): boolean {
+    const document = this.document;
+    const layer = this.layer;
+    const face = this.face;
+    if (!document || !layer || !face) return false;
+    if (Math.abs(this.height) < 1e-6) return true;
+    return this.push(
+      document,
+      layer,
+      { ...makeFace(face), colour: this.colour(layer) },
+      `Flatten ${layer.name}`,
+    );
   }
 
   dispose(): void {
@@ -104,8 +162,25 @@ export class ExtrudeGizmo extends EventTarget {
     this.viewer.canvasElement.removeEventListener('pointermove', this.onPointerMove, true);
     this.viewer.canvasElement.removeEventListener('pointerup', this.onPointerUp, true);
     this.viewer.canvasElement.removeEventListener('pointercancel', this.onPointerUp, true);
+    window.removeEventListener('keydown', this.onKeyDown);
     this.unsubscribe();
     this.viewer.removeHelper(this.group);
+  }
+
+  private colour(layer: Layer): [number, number, number] {
+    return layer.solid?.colour ?? [1, 0, 0];
+  }
+
+  private push(document: Document, layer: Layer, solid: SolidData, label: string): boolean {
+    try {
+      document.history.push(new SetSolid(document, layer.id, solid, label));
+      return true;
+    } catch (error) {
+      this.options.notify(error instanceof Error ? error.message : 'Could not extrude.', 'error');
+      return false;
+    } finally {
+      this.refresh();
+    }
   }
 
   private unsubscribe(): void {
@@ -123,7 +198,7 @@ export class ExtrudeGizmo extends EventTarget {
     this.refresh();
   };
 
-  /** Attach to the selected layer when it is a single unlocked face; hide otherwise. */
+  /** Attach to the selected layer when it is a single unlocked (unconfirmed) face; hide otherwise. */
   private readonly refresh = (): void => {
     if (this.drag) return;
     const document = this.document;
@@ -141,23 +216,26 @@ export class ExtrudeGizmo extends EventTarget {
     this.dispatchEvent(new Event('target-changed'));
   };
 
-  /** World origin/axis of the arrow. */
-  private axisWorld(): { origin: Vector3; axis: Vector3 } | undefined {
+  /** World origin/axis of the arrow: the face centroid lifted by the pending height, along the world normal. */
+  private axisWorld(height = this.height): { origin: Vector3; axis: Vector3 } | undefined {
     const layer = this.layer;
     const face = this.face;
     if (!layer || !face) return undefined;
     layer.object.updateMatrixWorld(true);
-    const origin = faceCentroid(face).applyMatrix4(layer.object.matrixWorld);
+    const normalLocal = new Vector3(...face.normal).normalize();
+    const origin = faceCentroid(face)
+      .addScaledVector(normalLocal, height)
+      .applyMatrix4(layer.object.matrixWorld);
     const rotation = new Quaternion();
     layer.object.getWorldQuaternion(rotation);
-    const axis = new Vector3(...face.normal).normalize().applyQuaternion(rotation).normalize();
+    const axis = normalLocal.clone().applyQuaternion(rotation).normalize();
     return { origin, axis };
   }
 
   /** Sizes and places the arrow every frame (constant on-screen size, like the gizmo). */
   private readonly update = (): void => {
     if (!this.group.visible) return;
-    const axisWorld = this.axisWorld();
+    const axisWorld = this.axisWorld(this.drag ? this.drag.height : this.height);
     if (!axisWorld) return;
     const { origin, axis } = axisWorld;
     const length = Math.max(origin.distanceTo(this.viewer.camera.position) * 0.22, 1e-3);
@@ -205,11 +283,13 @@ export class ExtrudeGizmo extends EventTarget {
     event.stopImmediatePropagation();
     event.preventDefault();
     this.viewer.lockCamera(true);
+    const startHeight = this.height;
     this.drag = {
       origin: axisWorld.origin,
       axis: axisWorld.axis,
       startOffset: this.axisOffset(event, axisWorld.origin, axisWorld.axis),
-      height: 0,
+      startHeight,
+      height: startHeight,
       original: this.layer.solid,
     };
     try {
@@ -227,13 +307,9 @@ export class ExtrudeGizmo extends EventTarget {
     event.stopImmediatePropagation();
     const offset = this.axisOffset(event, drag.origin, drag.axis) - drag.startOffset;
     const scale = layer.object.getWorldScale(new Vector3());
-    drag.height = offset / ((scale.x + scale.y + scale.z) / 3 || 1);
-    // Live preview; `face` stays set so the gizmo keeps treating the layer as a face.
-    layer.setSolid(
-      Math.abs(drag.height) > 1e-6
-        ? { ...extrudeFace(face, drag.height), colour: drag.original.colour, face }
-        : drag.original,
-    );
+    drag.height = drag.startHeight + offset / ((scale.x + scale.y + scale.z) / 3 || 1);
+    // Live preview (no command yet); the face stays flagged so the arrow stays attached.
+    layer.setSolid({ ...pendingExtrusion(face, drag.height), colour: drag.original.colour });
     this.dispatchEvent(new CustomEvent('preview', { detail: { height: drag.height } }));
   };
 
@@ -252,29 +328,30 @@ export class ExtrudeGizmo extends EventTarget {
     const layer = this.layer;
     const face = this.face;
     if (!document || !layer || !face) return;
-    // Restore the plain face, then commit through a command so undo brings the face back.
+    // Restore the starting state, then record the pull as one undo step (still unconfirmed).
     layer.setSolid(drag.original);
-    if (Math.abs(drag.height) > 1e-6) this.commit(document, layer, face, drag.height);
+    if (Math.abs(drag.height - drag.startHeight) > 1e-6)
+      this.push(
+        document,
+        layer,
+        { ...pendingExtrusion(face, drag.height), colour: drag.original.colour },
+        `Pull ${layer.name} to ${formatHeight(drag.height)}`,
+      );
     this.dispatchEvent(new CustomEvent('preview', { detail: { height: undefined } }));
   };
 
-  private commit(document: Document, layer: Layer, face: FaceData, height: number): void {
-    const colour = layer.solid?.colour ?? [1, 0, 0];
-    try {
-      document.history.push(
-        new SetSolid(
-          document,
-          layer.id,
-          { ...extrudeFace(face, height), colour },
-          `Extrude ${layer.name} ${height >= 0 ? '+' : '−'}${Math.abs(height).toFixed(3)} m`,
-        ),
-      );
-      this.options.notify(
-        `Extruded “${layer.name}” by ${Math.abs(height).toFixed(3)} m along its normal.`,
-      );
-    } catch (error) {
-      this.options.notify(error instanceof Error ? error.message : 'Could not extrude.', 'error');
-    }
-    this.refresh();
-  }
+  /** Enter confirms the pending extrusion when the canvas (not a field) has focus. */
+  private readonly onKeyDown = (event: KeyboardEvent): void => {
+    if (event.code !== 'Enter' || !this.layer || Math.abs(this.height) < 1e-6) return;
+    const target = event.target;
+    if (
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLTextAreaElement ||
+      target instanceof HTMLSelectElement ||
+      target instanceof HTMLButtonElement
+    )
+      return;
+    event.preventDefault();
+    this.confirm();
+  };
 }

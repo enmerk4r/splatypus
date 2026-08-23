@@ -9,9 +9,9 @@ export interface ModelPanelCallbacks {
 }
 
 /**
- * MODEL panel: outline shape (polyline / rectangle / polygon / circle), polygon sides,
- * ortho drawing, and numeric extrusion of the selected face (the arrow gizmo does the same
- * by dragging).
+ * MODEL panel: outline shape (polyline / rectangle / polygon / circle), polygon sides, ortho
+ * mode, and the extrusion of the selected face — numeric height (the arrow gizmo does the
+ * same by dragging), then **Confirm** to finalise or **Reset** to flatten.
  */
 export function createModelPanel(
   viewer: Viewer,
@@ -34,14 +34,15 @@ export function createModelPanel(
       <div class="sketch-row"><label for="model-sides">Sides <output id="model-sides-value"></output></label>
         <input id="model-sides" type="range" min="3" max="24" step="1" />
       </div>
-      <label class="sketch-toggle"><input id="model-ortho" type="checkbox" /> Ortho (axis-aligned segments) — hold Shift to toggle while drawing</label>
-      <p class="sketch-hint">P: click an outline on a plane (height from the surface under the first click). Enter / double-click / first point closes a polyline; Backspace removes a point. The result is a translucent face — rotate it, then extrude along its normal.</p>
+      <label class="sketch-toggle"><input id="model-ortho" type="checkbox" /> Ortho — axis-aligned segments, 15° rotation steps (hold Shift to flip)</label>
+      <p class="sketch-hint">P: click an outline on a plane (height from the surface under the first click). After the first point, type a length (rectangle: width, Enter, depth — or “2,1.5”) and the next click only sets the direction. Enter / double-click / first point closes a polyline; Backspace removes a point. The result is a translucent face — rotate it, then extrude along its normal.</p>
       <div class="layers-header segment-subhead">EXTRUDE</div>
       <div class="sketch-row"><label for="model-height">Height <output id="model-height-live"></output></label>
         <input id="model-height" type="number" step="any" aria-label="Extrusion height in metres (negative = opposite direction)" />
       </div>
       <div class="segment-actions">
-        <button type="button" id="model-extrude" class="primary">Extrude face</button>
+        <button type="button" id="model-confirm" class="primary">Confirm</button>
+        <button type="button" id="model-reset">Reset</button>
       </div>
       <p class="sketch-status" id="model-status"></p>
     </div>`;
@@ -52,7 +53,8 @@ export function createModelPanel(
   const ortho = pick<HTMLInputElement>('#model-ortho');
   const height = pick<HTMLInputElement>('#model-height');
   const heightLive = pick<HTMLOutputElement>('#model-height-live');
-  const extrude = pick<HTMLButtonElement>('#model-extrude');
+  const confirm = pick<HTMLButtonElement>('#model-confirm');
+  const reset = pick<HTMLButtonElement>('#model-reset');
   const status = pick<HTMLParagraphElement>('#model-status');
 
   const render = (): void => {
@@ -65,13 +67,21 @@ export function createModelPanel(
     sidesValue.value = String(settings.sides);
     sides.disabled = settings.shape !== 'polygon';
     ortho.checked = settings.ortho;
-    if (globalThis.document.activeElement !== height) height.value = String(settings.height);
+    ortho.indeterminate = settings.orthoActive !== settings.ortho;
     const target = gizmo.target;
-    extrude.disabled = !target;
+    const pending = target ? gizmo.height : 0;
+    if (globalThis.document.activeElement !== height && !gizmo.isDragging)
+      height.value = target
+        ? String(Number((pending || settings.height).toFixed(4)))
+        : String(settings.height);
     height.disabled = !target;
-    status.textContent = target
-      ? `Face “${target.name}” selected — drag the lime arrow or enter a height.`
-      : 'Select a face layer (Select tool) to extrude it.';
+    confirm.disabled = !target || Math.abs(pending) < 1e-6;
+    reset.disabled = !target || Math.abs(pending) < 1e-6;
+    status.textContent = !target
+      ? 'Select a face layer (Select tool) to extrude it.'
+      : Math.abs(pending) < 1e-6
+        ? `Face “${target.name}” — drag the lime arrow or enter a height, then Confirm.`
+        : `“${target.name}” pulled ${Math.abs(pending).toFixed(3)} m — pull again, adjust the height, then Confirm (Enter) or Reset.`;
   };
 
   shapeButtons.forEach((button) =>
@@ -79,19 +89,25 @@ export function createModelPanel(
   );
   sides.addEventListener('input', () => settings.setSides(Number(sides.value)));
   ortho.addEventListener('change', () => settings.setOrtho(ortho.checked));
-  height.addEventListener('change', () => settings.setHeight(Number(height.value)));
-  const onExtrude = (): void => {
+  const applyHeight = (): void => {
     const value = Number(height.value);
-    settings.setHeight(value);
-    if (!gizmo.extrudeBy(value)) callbacks.notify('Select a face layer first.', 'warning');
+    if (!Number.isFinite(value)) {
+      callbacks.notify('Enter a height in metres.', 'warning');
+      return;
+    }
+    if (value !== 0) settings.setHeight(value);
+    if (!gizmo.setHeight(value)) callbacks.notify('Select a face layer first.', 'warning');
   };
-  extrude.addEventListener('click', onExtrude);
+  height.addEventListener('change', applyHeight);
   height.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') {
       event.preventDefault();
-      onExtrude();
+      applyHeight();
+      height.blur();
     }
   });
+  confirm.addEventListener('click', () => gizmo.confirm());
+  reset.addEventListener('click', () => gizmo.reset());
   const onPreview = (event: Event): void => {
     const value = (event as CustomEvent<{ height?: number }>).detail.height;
     heightLive.value =

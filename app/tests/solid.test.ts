@@ -4,6 +4,7 @@ import { readProject, writeProject } from '../src/io/projectFormat';
 import { Document } from '../src/model/Document';
 import { Layer } from '../src/model/Layer';
 import { SetSolid } from '../src/model/meshCommands';
+import { ScaleSplats } from '../src/model/segmentCommands';
 import { SplatStore } from '../src/model/SplatStore';
 import {
   extrudeFace,
@@ -11,6 +12,8 @@ import {
   faceCentroid,
   makeFace,
   meshToSplats,
+  pendingExtrusion,
+  scaleSolid,
   signedVolume,
   solidBounds,
 } from '../src/mesh/solid';
@@ -182,5 +185,83 @@ describe('mesh layers', () => {
     const again = readProject(writeProject(document, view)).document;
     documents.push(again);
     expect(again.layers[1]?.solid?.face?.normal).toEqual([0, 1, 0]);
+
+    // A pulled-but-unconfirmed extrusion keeps its face and pending height across save/load.
+    faceLayer.setSolid({ ...pendingExtrusion(face, 0.25), colour: [1, 1, 1] });
+    expect(faceLayer.solid?.face).toBeDefined();
+    expect(faceLayer.solid?.faceHeight).toBe(0.25);
+    expect(faceLayer.localBounds().max[1]).toBeCloseTo(0.25, 6);
+    const pending = readProject(writeProject(document, view)).document;
+    documents.push(pending);
+    expect(pending.layers[1]?.solid?.faceHeight).toBe(0.25);
+    expect(pending.layers[1]?.solid?.face?.polygon.length).toBe(9);
+    // ~0 flattens again.
+    expect(pendingExtrusion(face, 0).faceHeight).toBeUndefined();
+    expect(pendingExtrusion(face, 0).positions.length).toBe(9);
+  });
+
+  it('scales solids per axis: faces stay editable, meshes get their vertices scaled', () => {
+    const square: FaceData = {
+      polygon: new Float32Array([-1, 0, -1, 1, 0, -1, 1, 0, 1, -1, 0, 1]),
+      normal: [0, 1, 0],
+    };
+    // A flat face: outline scaled, still a face, normal unchanged for an in-plane scale.
+    const face = scaleSolid({ ...makeFace(square), colour: [1, 0, 0] }, [2, 1, 0.5]);
+    expect(face.face).toBeDefined();
+    expect(solidBounds(face.positions).max).toEqual([2, 0, 0.5]);
+    expect(face.face?.normal).toEqual([0, 1, 0]);
+    // A pending extrusion: rebuilt from the scaled outline with the height scaled along the normal.
+    const pending = scaleSolid({ ...pendingExtrusion(square, 0.5), colour: [1, 0, 0] }, [1, 3, 1]);
+    expect(pending.faceHeight).toBeCloseTo(1.5, 6);
+    expect(solidBounds(pending.positions).max[1]).toBeCloseTo(1.5, 6);
+    // A confirmed mesh: vertices scaled, volume scales with the product, still outward.
+    const box = { ...extrudeFace(square, 1), colour: [1, 0, 0] as [number, number, number] };
+    const scaled = scaleSolid(box, [2, 1, 3]);
+    expect(signedVolume(scaled.positions, scaled.indices)).toBeCloseTo(4 * 6, 5);
+    expect(scaled.source).toBeUndefined();
+    const uniform = scaleSolid(box, [2, 2, 2]);
+    expect(uniform.source?.height).toBeCloseTo(2, 6);
+    expect(signedVolume(uniform.positions, uniform.indices)).toBeCloseTo(32, 5);
+    // A mirroring scale keeps faces outward.
+    const mirrored = scaleSolid(box, [-1, 1, 1]);
+    expect(signedVolume(mirrored.positions, mirrored.indices)).toBeCloseTo(4, 5);
+    // A tilted face: the normal follows the inverse transpose.
+    const tilted = scaleSolid(
+      {
+        ...makeFace({
+          polygon: new Float32Array([0, 0, 0, 1, -1, 0, 1, -1, 1, 0, 0, 1]),
+          normal: [Math.SQRT1_2, Math.SQRT1_2, 0],
+        }),
+        colour: [1, 0, 0],
+      },
+      [2, 1, 1],
+    );
+    const n = tilted.face!.normal;
+    // Points (2,0,0)-(2,-1,0): edge direction (2,-1,0) must be perpendicular to the normal.
+    expect(n[0] * 2 + n[1] * -1).toBeCloseTo(0, 6);
+  });
+
+  it('ScaleSplats bakes a non-uniform scale into a mesh layer undoably', () => {
+    const document = new Document('meshes');
+    documents.push(document);
+    const square: FaceData = {
+      polygon: new Float32Array([-1, 0, -1, 1, 0, -1, 1, 0, 1, -1, 0, 1]),
+      normal: [0, 1, 0],
+    };
+    const layer = new Layer({
+      name: 'Box',
+      kind: 'mesh',
+      sourceName: 'mesh-1',
+      store: emptyStore(),
+      solid: { ...extrudeFace(square, 1), colour: [0, 1, 0] },
+    });
+    document.addLayer(layer);
+    document.history.push(new ScaleSplats(document, layer.id, [2, 1, 1]));
+    expect(layer.localBounds().max[0]).toBeCloseTo(2, 6);
+    expect(layer.localBounds().max[2]).toBeCloseTo(1, 6);
+    document.history.undo();
+    expect(layer.localBounds().max[0]).toBeCloseTo(1, 6);
+    document.history.redo();
+    expect(layer.localBounds().max[0]).toBeCloseTo(2, 6);
   });
 });

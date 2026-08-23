@@ -14,8 +14,13 @@ export interface SolidData {
   indices: Uint32Array; // 3 per triangle
   /** Linear RGB 0..1 */
   colour: [number, number, number];
-  /** Present while the mesh is still an unextruded face (rendered translucent, double-sided). */
+  /**
+   * Present while the mesh is still an unconfirmed face (rendered translucent, double-sided):
+   * flat when `faceHeight` is unset, otherwise a pulled-but-not-confirmed extrusion.
+   */
   face?: FaceData;
+  /** Pending extrusion height of an unconfirmed face (see `pendingExtrusion`). */
+  faceHeight?: number;
   /** How it was authored, kept so a project can re-edit it later. */
   source?: { kind: 'extrude'; face: FaceData; height: number };
 }
@@ -87,6 +92,82 @@ export function makeFace(face: FaceData): Omit<SolidData, 'colour'> {
     positions: face.polygon.slice(),
     indices: Uint32Array.from(tris.flat()),
     face: { polygon: face.polygon.slice(), normal: [...face.normal] as [number, number, number] },
+  };
+}
+
+/**
+ * An unconfirmed face pulled to `height`: the extruded mesh, still flagged as a face so the
+ * gizmo stays attached and it renders translucent. ~0 gives the flat face back.
+ */
+export function pendingExtrusion(face: FaceData, height: number): Omit<SolidData, 'colour'> {
+  if (!Number.isFinite(height) || Math.abs(height) < 1e-6) return makeFace(face);
+  const { positions, indices } = extrudeFace(face, height);
+  return {
+    positions,
+    indices,
+    face: { polygon: face.polygon.slice(), normal: [...face.normal] as [number, number, number] },
+    faceHeight: height,
+  };
+}
+
+/** A face scaled per axis: planar still, normal transformed by the inverse transpose. */
+function scaleFace(face: FaceData, factor: readonly [number, number, number]): FaceData {
+  const polygon = face.polygon.slice();
+  for (let i = 0; i < polygon.length; i += 3) {
+    polygon[i] = polygon[i]! * factor[0];
+    polygon[i + 1] = polygon[i + 1]! * factor[1];
+    polygon[i + 2] = polygon[i + 2]! * factor[2];
+  }
+  const normal = new Vector3(
+    face.normal[0] / (factor[0] || 1),
+    face.normal[1] / (factor[1] || 1),
+    face.normal[2] / (factor[2] || 1),
+  ).normalize();
+  return { polygon, normal: [normal.x, normal.y, normal.z] };
+}
+
+/**
+ * Bakes a per-axis (layer-local) scale into a solid. Faces and pending extrusions are
+ * rebuilt from their scaled outline so they stay editable; a confirmed mesh just has its
+ * vertices scaled (its extrusion source survives only a uniform scale).
+ */
+export function scaleSolid(solid: SolidData, factor: readonly [number, number, number]): SolidData {
+  const uniform = Math.abs(factor[0] - factor[1]) < 1e-9 && Math.abs(factor[1] - factor[2]) < 1e-9;
+  const alongNormal = (face: FaceData): number =>
+    Math.hypot(face.normal[0] * factor[0], face.normal[1] * factor[1], face.normal[2] * factor[2]);
+  if (solid.face) {
+    const face = scaleFace(solid.face, factor);
+    const height = solid.faceHeight === undefined ? 0 : solid.faceHeight * alongNormal(solid.face);
+    return { ...pendingExtrusion(face, height), colour: solid.colour };
+  }
+  const positions = solid.positions.slice();
+  for (let i = 0; i < positions.length; i += 3) {
+    positions[i] = positions[i]! * factor[0];
+    positions[i + 1] = positions[i + 1]! * factor[1];
+    positions[i + 2] = positions[i + 2]! * factor[2];
+  }
+  const indices = solid.indices.slice();
+  if (factor[0] * factor[1] * factor[2] < 0) {
+    // A mirroring scale flips the winding; restore outward faces.
+    for (let t = 0; t < indices.length; t += 3) {
+      const b = indices[t + 1]!;
+      indices[t + 1] = indices[t + 2]!;
+      indices[t + 2] = b;
+    }
+  }
+  return {
+    positions,
+    indices,
+    colour: solid.colour,
+    ...(solid.source && uniform
+      ? {
+          source: {
+            kind: 'extrude' as const,
+            face: scaleFace(solid.source.face, factor),
+            height: solid.source.height * factor[0],
+          },
+        }
+      : {}),
   };
 }
 

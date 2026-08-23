@@ -64,7 +64,7 @@ interface StoredLayer {
     positions: BinaryRef;
     indices: BinaryRef;
     colour: [number, number, number];
-    face?: { polygon: BinaryRef; normal: [number, number, number] };
+    face?: { polygon: BinaryRef; normal: [number, number, number]; height?: number };
     source?: {
       kind: 'extrude';
       face: { polygon: BinaryRef; normal: [number, number, number] };
@@ -161,6 +161,9 @@ export function writeProject(document: Document, view: ProjectViewState): ArrayB
                     face: {
                       polygon: payload.add(layer.solid.face.polygon),
                       normal: [...layer.solid.face.normal] as [number, number, number],
+                      ...(layer.solid.faceHeight !== undefined
+                        ? { height: layer.solid.faceHeight }
+                        : {}),
                     },
                   }
                 : {}),
@@ -314,6 +317,9 @@ export function readProject(buffer: ArrayBuffer): {
                     polygon: floats(bytes, payloadStart, stored.solid.face.polygon),
                     normal: [...stored.solid.face.normal] as [number, number, number],
                   },
+                  ...(typeof stored.solid.face.height === 'number'
+                    ? { faceHeight: stored.solid.face.height }
+                    : {}),
                 }
               : {}),
             // Projects written before faces existed stored `source` differently; drop it then.

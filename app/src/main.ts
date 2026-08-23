@@ -15,8 +15,9 @@ import { SketchTool } from './sketch/SketchTool';
 import { MeasureTool } from './sketch/MeasureTool';
 import { PolylineTool } from './mesh/PolylineTool';
 import { ExtrudeGizmo } from './mesh/ExtrudeGizmo';
-import { ModelSettingsStore } from './mesh/settings';
+import { ModelSettingsStore, ORTHO_ROTATION_STEP } from './mesh/settings';
 import { createModelPanel } from './ui/modelPanel';
+import type { GizmoReadout } from './viewer/LayerGizmo';
 import { createExportDialog } from './ui/exportDialog';
 import { createHoverLabel } from './ui/hoverLabel';
 import { Hud } from './ui/hud';
@@ -78,6 +79,15 @@ async function bootstrap(): Promise<void> {
     notify: (message, level) => hud.toast(message, level),
   });
   const modelSettings = new ModelSettingsStore();
+  // Ortho mode (or Shift) snaps gizmo rotations to 15° steps.
+  const syncRotationSnap = (): void =>
+    viewer.setRotationSnap(modelSettings.orthoActive ? ORTHO_ROTATION_STEP : null);
+  modelSettings.addEventListener('settings-changed', syncRotationSnap);
+  syncRotationSnap();
+  // Live angle / factor / distance readout next to the gizmo while dragging it.
+  const onGizmoReadout = (event: Event): void =>
+    sketchOverlay.setBadge((event as CustomEvent<GizmoReadout | undefined>).detail);
+  viewer.addEventListener('gizmo-readout', onGizmoReadout);
   const polylineTool = new PolylineTool(viewer, {
     overlay: sketchOverlay,
     settings: modelSettings,
@@ -288,6 +298,9 @@ async function bootstrap(): Promise<void> {
       polylineTool.dispose();
       extrudeGizmo.dispose();
       modelPanel.dispose();
+      modelSettings.removeEventListener('settings-changed', syncRotationSnap);
+      modelSettings.dispose();
+      viewer.removeEventListener('gizmo-readout', onGizmoReadout);
       sketchOverlay.dispose();
       viewer.dispose();
     },

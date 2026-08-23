@@ -193,6 +193,8 @@ export function bakeAnisotropicScale(store: SplatStore, factor: Factor3): void {
  * (exact for axis-aligned splats, an approximation otherwise). The next sync discards it.
  */
 export function previewAnisotropicScale(layer: Layer, factor: Factor3): void {
+  // Mesh layers: preview on the three.js object; `setSolid` on commit resets it.
+  layer.solidObject?.scale.set(factor[0], factor[1], factor[2]);
   const packed = layer.mesh.packedSplats;
   const array = packed?.packedArray;
   if (!packed || !array) return;
