@@ -302,7 +302,11 @@ export function createToolbar(
       value.setAttribute('aria-pressed', String(value.dataset.shapeTool === modelSettings.shape));
   };
 
-  /** One line above the bars: the active tool and the keys that matter right now. */
+  /**
+   * One line above the bars: the active tool and the keys that matter right now. Shown for a
+   * moment whenever the tool or mode changes, then fades; stays up in fly mode.
+   */
+  let statusTimer = 0;
   const renderStatus = (): void => {
     let text: string;
     if (viewer.cameraRig.mode === 'fly') {
@@ -357,7 +361,15 @@ export function createToolbar(
         }
       }
     }
-    if (status.textContent !== text) status.textContent = text;
+    const fly = viewer.cameraRig.mode === 'fly';
+    if (status.textContent !== text) {
+      status.textContent = text;
+      status.classList.add('visible');
+      window.clearTimeout(statusTimer);
+      if (!fly) statusTimer = window.setTimeout(() => status.classList.remove('visible'), 2400);
+    } else if (fly && !status.classList.contains('visible')) {
+      status.classList.add('visible');
+    }
   };
 
   const execute = (action: () => void): void => {
@@ -648,9 +660,13 @@ export function createToolbar(
   };
   const onOutsidePointer = (event: PointerEvent): void => {
     const target = event.target as Node;
-    for (const { element, anchor } of popovers)
+    for (const { element, anchor } of popovers) {
+      // The crop controls are a mode: they stay up while the box is shown, so dragging the
+      // box on the canvas doesn't hide Keep / Cut. The Crop button or Escape closes them.
+      if (element === cropPopover && crop.isActive) continue;
       if (!element.hidden && !element.contains(target) && !anchor.contains(target))
         setPopover(element, false);
+    }
   };
   scaleApply.addEventListener('click', applyScaleFactor);
   scaleInput.addEventListener('keydown', onScaleKeyDown);
@@ -708,6 +724,7 @@ export function createToolbar(
       observed?.removeEventListener('history-changed', render);
       document.removeEventListener('pointerdown', onOutsidePointer);
       window.removeEventListener('keydown', onKeyDown, true);
+      window.clearTimeout(statusTimer);
       regionTool.dispose();
       host.replaceChildren();
     },
