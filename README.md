@@ -23,6 +23,8 @@
   <a href="#development">Development</a>
   &nbsp;·&nbsp;
   <a href="#team">Team</a>
+  &nbsp;·&nbsp;
+  <a href="#license">License</a>
 </p>
 
 <p align="center">
@@ -31,6 +33,7 @@
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-strict-b8f34a?labelColor=1a1d1c" />
   <img alt="Runs in the browser" src="https://img.shields.io/badge/runs-in%20the%20browser-b8f34a?labelColor=1a1d1c" />
   <img alt="AECtech 2026 Boston" src="https://img.shields.io/badge/AECtech-2026%20Boston-b8f34a?labelColor=1a1d1c" />
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-b8f34a?labelColor=1a1d1c" /></a>
 </p>
 
 <table>
@@ -386,3 +389,7 @@ Built at the **AECtech 2026 Boston** hackathon by (alphabetically):
 [CLIP](https://huggingface.co/Xenova/clip-vit-base-patch32) ·
 [ArtisanGS](https://arxiv.org/abs/2602.10173) for the lift-a-2D-mask-into-3D idea ·
 [Tweakpane](https://tweakpane.github.io/docs/).
+
+## License
+
+[MIT](LICENSE) — use it, fork it, ship it; just keep the notice.
