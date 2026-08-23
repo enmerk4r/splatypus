@@ -14,6 +14,9 @@ import { SketchOverlay } from './sketch/SketchOverlay';
 import { SketchTool } from './sketch/SketchTool';
 import { MeasureTool } from './sketch/MeasureTool';
 import { PolylineTool } from './mesh/PolylineTool';
+import { ExtrudeGizmo } from './mesh/ExtrudeGizmo';
+import { ModelSettingsStore } from './mesh/settings';
+import { createModelPanel } from './ui/modelPanel';
 import { createExportDialog } from './ui/exportDialog';
 import { createHoverLabel } from './ui/hoverLabel';
 import { Hud } from './ui/hud';
@@ -74,10 +77,17 @@ async function bootstrap(): Promise<void> {
     popover: element<HTMLFormElement>('measure-popover'),
     notify: (message, level) => hud.toast(message, level),
   });
+  const modelSettings = new ModelSettingsStore();
   const polylineTool = new PolylineTool(viewer, {
     overlay: sketchOverlay,
-    popover: element<HTMLFormElement>('extrude-popover'),
+    settings: modelSettings,
     colour: () => sketchSettings.snapshot().colour,
+    notify: (message, level) => hud.toast(message, level),
+  });
+  const extrudeGizmo = new ExtrudeGizmo(viewer, {
+    notify: (message, level) => hud.toast(message, level),
+  });
+  const modelPanel = createModelPanel(viewer, modelSettings, extrudeGizmo, element('model-panel'), {
     notify: (message, level) => hud.toast(message, level),
   });
   const sketchTool = new SketchTool(viewer, {
@@ -252,6 +262,8 @@ async function bootstrap(): Promise<void> {
       crop,
       sketchTool,
       sketchSettings,
+      extrudeGizmo,
+      modelSettings,
     };
 
   window.addEventListener('beforeunload', (event) => {
@@ -274,6 +286,8 @@ async function bootstrap(): Promise<void> {
       sketchTool.dispose();
       measureTool.dispose();
       polylineTool.dispose();
+      extrudeGizmo.dispose();
+      modelPanel.dispose();
       sketchOverlay.dispose();
       viewer.dispose();
     },

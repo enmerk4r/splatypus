@@ -6,6 +6,7 @@ import {
   LineBasicMaterial,
   LineSegments,
   Mesh,
+  DoubleSide,
   MeshLambertMaterial,
   Object3D,
 } from 'three';
@@ -111,16 +112,26 @@ export class Layer extends EventTarget {
     const geometry = indexed.toNonIndexed();
     geometry.computeVertexNormals();
     indexed.dispose();
+    const isFace = solid.face !== undefined;
     const material = new MeshLambertMaterial({
       color: new Color(solid.colour[0], solid.colour[1], solid.colour[2]),
       flatShading: true,
+      // An unextruded face is a translucent, double-sided sheet until it is extruded.
+      side: isFace ? DoubleSide : undefined,
+      transparent: isFace,
+      opacity: isFace ? 0.45 : 1,
+      depthWrite: !isFace,
     });
     const mesh = new Mesh(geometry, material);
     mesh.name = `Solid: ${this.name}`;
     mesh.visible = this.shown;
     const edges = new LineSegments(
       new EdgesGeometry(geometry, 20),
-      new LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35 }),
+      new LineBasicMaterial({
+        color: isFace ? 0xb8f34a : 0x000000,
+        transparent: true,
+        opacity: isFace ? 0.9 : 0.35,
+      }),
     );
     mesh.add(edges);
     this.solidEdges = edges;

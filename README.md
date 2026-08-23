@@ -128,15 +128,22 @@ their distance — then type the real distance and **Scale layer**: the layer is
 about the first point so the two points are that far apart (one undoable transform). Use it to
 bring phone scans, point clouds and imported objects to true size before sketching or measuring.
 
-## Mesh layers (polyline → extrude)
+## Mesh layers (draw a face → extrude)
 
-Press `P`, click an outline on a horizontal plane (its height comes from the surface under the
-first click, else the grid; segment lengths are shown live, Shift snaps to 45°, Backspace undoes
-a point), close with Enter / double-click / a click on the first point, then type a height: a
-capped mesh in the SKETCH colour becomes a **mesh layer** — moved, rotated, scaled (non-uniformly
-too), duplicated, hidden, soloed and undone like any layer, and click-selectable. Meshes are
-stored as meshes in the Splatypus project and sampled into flat gaussians when you export a PLY
-or merge into a splat layer. Details: [docs/MESH_NOTES.md](docs/MESH_NOTES.md).
+Press `P` and pick a shape in the **MODEL** panel — freeform **polyline** (Enter / double-click /
+a click on the first point closes it, Backspace removes a point), **rectangle** (two corners),
+regular **polygon** (centre + radius, 3–24 sides) or **circle** (centre + radius). Outlines are
+drawn on a horizontal plane whose height comes from the surface under the first click, else the
+grid; segment lengths are shown live. **Ortho** mode keeps polyline segments axis-aligned —
+holding Shift temporarily flips it either way. Closing the outline creates a translucent,
+unextruded **face** layer in the SKETCH colour: move or rotate it like any layer (e.g. 90° about
+X to stand it up), then — with the face selected in the Select tool — drag the lime arrow that
+sprouts from its centroid, or type a height in MODEL and press **Extrude face**. Extrusion is
+always along the face's own normal, so a rotated face extrudes sideways. The result is a capped
+**mesh layer** — moved, rotated, scaled (non-uniformly too), duplicated, hidden, soloed and undone
+like any layer, and click-selectable. Meshes are stored as meshes in the Splatypus project and
+sampled into flat gaussians when you export a PLY or merge into a splat layer. Details:
+[docs/MESH_NOTES.md](docs/MESH_NOTES.md).
 
 ## Export
 
