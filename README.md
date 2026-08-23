@@ -55,6 +55,16 @@
   </tr>
 </table>
 
+## Team
+
+Built at the **AECtech 2026 Boston** hackathon by (alphabetically):
+
+- [**Chloe Ni**](https://www.linkedin.com/in/jiayueni/) — Harvard GSD
+- [**Habib Nahouta Tresor, EIT**](https://www.linkedin.com/in/habib-nahouta-tresor/) — InfraTracker
+- [**Hairu Wang**](https://www.linkedin.com/in/hairu-wang-4ba6a8229/) — PARADIGM Structural Engineers, Inc.
+- [**Harish Palani**](https://www.linkedin.com/in/harish-palani-6b34b2207/) — Perkins&Will
+- [**Sergey Pigach**](https://www.linkedin.com/in/sergey-pigach-9ab07448) — CORE studio | Thornton Tomasetti
+
 ---
 
 ## Why
@@ -370,16 +380,6 @@ does not bake this viewer-only transform. _VIEW › Up axis_ switches between `Y
 - AI select is single-view and approximate on thin or porous surfaces; without WebGPU (Safari,
   Firefox) inference runs on single-threaded wasm and takes seconds per view.
 - Desktop Chrome, Firefox and Safari are the targets; mobile layouts work but are not polished.
-
-## Team
-
-Built at the **AECtech 2026 Boston** hackathon by (alphabetically):
-
-- [**Chloe Ni**](https://www.linkedin.com/in/jiayueni/) — Harvard GSD
-- [**Habib Nahouta Tresor, EIT**](https://www.linkedin.com/in/habib-nahouta-tresor/) — InfraTracker
-- [**Hairu Wang**](https://www.linkedin.com/in/hairu-wang-4ba6a8229/) — PARADIGM Structural Engineers, Inc.
-- [**Harish Palani**](https://www.linkedin.com/in/harish-palani-6b34b2207/) — Perkins&Will
-- [**Sergey Pigach**](https://www.linkedin.com/in/sergey-pigach-9ab07448) — CORE studio | Thornton Tomasetti
 
 ## Acknowledgements
 
