@@ -4,7 +4,18 @@ import { MAX_RADIUS_PX, MIN_RADIUS_PX } from '../sketch/settings';
 import type { SketchSettingsStore } from '../sketch/settings';
 import type { PlacementMode } from '../sketch/stroke';
 import type { Viewer } from '../viewer/Viewer';
+import type { ToolMode } from '../viewer/Viewer';
 import { createPanelShell } from './collapse';
+
+/** The tools whose settings the SKETCH panel holds. */
+const BRUSH_PANEL_TOOLS = new Set<ToolMode>([
+  'sketch',
+  'erase',
+  'recolor',
+  'fade',
+  'grab',
+  'inflate',
+]);
 
 const SWATCHES = ['#ff3b30', '#b8f34a', '#ffffff', '#35d0ff', '#ffd60a', '#ff4fd8'];
 
@@ -64,7 +75,8 @@ export function createSketchPanel(
 
   const render = (): void => {
     const document = viewer.document;
-    root.hidden = !document || document.layers.length === 0;
+    // Contextual: brush settings only matter while a brush tool is active.
+    root.hidden = !document || document.layers.length === 0 || !BRUSH_PANEL_TOOLS.has(viewer.tool);
     colour.value = settings.colour;
     size.value = String(Math.log(settings.radiusPx));
     sizeValue.value = sizeLabel(settings.radiusPx);
@@ -118,12 +130,14 @@ export function createSketchPanel(
   };
   viewer.addEventListener('document-changed', observe);
   settings.addEventListener('settings-changed', render);
+  viewer.addEventListener('tool-changed', render);
   observe();
 
   return {
     dispose: (): void => {
       viewer.removeEventListener('document-changed', observe);
       settings.removeEventListener('settings-changed', render);
+      viewer.removeEventListener('tool-changed', render);
       observed?.removeEventListener('layers-changed', render);
       observed?.removeEventListener('layer-changed', render);
       observed?.removeEventListener('selection-changed', render);

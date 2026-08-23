@@ -79,7 +79,8 @@ export function createRegionPanel(
 
   const render = (): void => {
     const document = viewer.document;
-    root.hidden = !document || document.layers.length === 0;
+    // Contextual: the selection settings only matter while the Select tool is active.
+    root.hidden = !document || document.layers.length === 0 || viewer.tool !== 'select';
     if (!document) return;
     depth.checked = settings.depthGate;
     depthRange.value = String(Math.round(settings.depthTolerance * 100));
@@ -184,6 +185,7 @@ export function createRegionPanel(
   viewer.addEventListener('document-changed', observe);
   segmentation.addEventListener('region-changed', render);
   settings.addEventListener('settings-changed', render);
+  viewer.addEventListener('tool-changed', render);
   depth.addEventListener('change', onDepth);
   depthRange.addEventListener('input', onDepthRange);
   snap.addEventListener('change', onSnap);
@@ -206,6 +208,7 @@ export function createRegionPanel(
       observed?.removeEventListener('layer-changed', render);
       segmentation.removeEventListener('region-changed', render);
       settings.removeEventListener('settings-changed', render);
+      viewer.removeEventListener('tool-changed', render);
       shell.dispose();
     },
   };

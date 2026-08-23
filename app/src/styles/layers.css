@@ -382,23 +382,112 @@
   border-top: 1px solid var(--line);
 }
 
+/* Bottom centre: a status strip over two pills — Tools (left) and Actions (right). */
 .toolbar {
   position: absolute;
   bottom: 18px;
   left: 50%;
   z-index: 5;
   display: flex;
-  gap: 6px;
+  flex-direction: column;
+  gap: 8px;
   align-items: center;
   max-width: calc(100vw - 36px);
   overflow: visible;
+  transform: translateX(-50%);
+}
+
+.toolbar-status {
+  min-height: 14px;
+  padding: 0 4px;
+  color: var(--lime);
+  opacity: 0.85;
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-size: 9px;
+  letter-spacing: 0.11em;
+  white-space: nowrap;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9);
+}
+
+.toolbar.has-popover .toolbar-status {
+  visibility: hidden;
+}
+
+.toolbar-bars {
+  position: relative;
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.toolbar-bar {
+  display: flex;
+  gap: 6px;
+  align-items: center;
   padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--panel);
   box-shadow: 0 12px 38px rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(18px);
-  transform: translateX(-50%);
+}
+
+/* Bottom-left: the camera cluster (orbit/fly, frame, views, grid). */
+.camera-bar {
+  position: absolute;
+  bottom: 18px;
+  left: 18px;
+  z-index: 5;
+}
+
+.camera-glyph {
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+/* Buttons that open a flyout: a small corner triangle. */
+.toolbar button.has-menu {
+  position: relative;
+}
+
+.toolbar button.has-menu::after {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  border: 3px solid transparent;
+  border-right-color: currentColor;
+  border-bottom-color: currentColor;
+  opacity: 0.55;
+  content: '';
+}
+
+/* Joined Move | Rotate | Scale control nested under Select. */
+.toolbar-segment {
+  display: flex;
+}
+
+.toolbar-segment button {
+  border-radius: 0;
+}
+
+.toolbar-segment button + button {
+  margin-left: -1px;
+}
+
+.toolbar-segment button:first-child {
+  border-radius: 4px 0 0 4px;
+}
+
+.toolbar-segment button:last-child {
+  border-radius: 0 4px 4px 0;
+}
+
+.toolbar-segment button[aria-pressed='true'] {
+  position: relative;
+  z-index: 1;
+  background: rgba(184, 243, 74, 0.12);
 }
 
 .scale-popover,
@@ -499,7 +588,9 @@
   height: 30px;
 }
 
-.selection-popover {
+.selection-popover,
+.brush-popover,
+.model-popover {
   position: absolute;
   bottom: calc(100% + 10px);
   z-index: 2;
@@ -514,7 +605,9 @@
   backdrop-filter: blur(18px);
 }
 
-.selection-popover::after {
+.selection-popover::after,
+.brush-popover::after,
+.model-popover::after {
   position: absolute;
   top: 100%;
   left: 50%;
@@ -527,12 +620,16 @@
   transform: translate(-50%, -50%) rotate(45deg);
 }
 
-.toolbar .selection-popover button {
+.toolbar .selection-popover button,
+.toolbar .brush-popover button,
+.toolbar .model-popover button {
   width: 30px;
   height: 30px;
 }
 
-.selection-popover button[aria-pressed='true'] {
+.selection-popover button[aria-pressed='true'],
+.brush-popover button[aria-pressed='true'],
+.model-popover button[aria-pressed='true'] {
   border-color: var(--lime);
   color: var(--lime);
 }
@@ -584,7 +681,8 @@
   gap: 5px;
 }
 
-.toolbar button {
+.toolbar button,
+.camera-bar button {
   display: grid;
   width: 30px;
   height: 28px;
@@ -598,12 +696,15 @@
 }
 
 .toolbar button:hover:not(:disabled),
-.toolbar button[aria-pressed='true'] {
+.toolbar button[aria-pressed='true'],
+.camera-bar button:hover:not(:disabled),
+.camera-bar button[aria-pressed='true'] {
   border-color: var(--lime);
   color: var(--lime);
 }
 
-.toolbar button:disabled {
+.toolbar button:disabled,
+.camera-bar button:disabled {
   opacity: 0.35;
   cursor: default;
 }

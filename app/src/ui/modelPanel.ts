@@ -1,5 +1,5 @@
 import type { ExtrudeGizmo } from '../mesh/ExtrudeGizmo';
-import type { ModelSettingsStore, ShapeMode } from '../mesh/settings';
+import type { ModelSettingsStore } from '../mesh/settings';
 import type { Viewer } from '../viewer/Viewer';
 import { createPanelShell } from './collapse';
 import type { ToastLevel } from './hud';
@@ -23,19 +23,12 @@ export function createModelPanel(
   const shell = createPanelShell(root, 'MODEL', 'polyline');
   shell.body.innerHTML = `
     <div class="sketch-body">
-      <div class="sketch-buttons" role="group" aria-label="Outline shape">
-        ${(['polyline', 'rectangle', 'polygon', 'circle'] as ShapeMode[])
-          .map(
-            (name) =>
-              `<button type="button" data-shape="${name}">${name[0]!.toUpperCase() + name.slice(1)}</button>`,
-          )
-          .join('')}
-      </div>
+      <p class="sketch-hint" id="model-shape"></p>
       <div class="sketch-row"><label for="model-sides">Sides <output id="model-sides-value"></output></label>
         <input id="model-sides" type="range" min="3" max="24" step="1" />
       </div>
       <label class="sketch-toggle"><input id="model-ortho" type="checkbox" /> Ortho — axis-aligned segments, 15° rotation steps (hold Shift to flip)</label>
-      <p class="sketch-hint">P: click an outline on a plane (height from the surface under the first click). After the first point, type a length (rectangle: width, Enter, depth — or “2,1.5”) and the next click only sets the direction. Enter / double-click / first point closes a polyline; Backspace removes a point. The result is a translucent face — rotate it, then extrude along its normal.</p>
+      <p class="sketch-hint">Click an outline on a plane (height from the surface under the first click). After the first point, type a length (rectangle: width, Enter, depth — or “2,1.5”) and the next click only sets the direction. Enter / double-click / first point closes a polyline; Backspace removes a point. The result is a translucent face — rotate it, then extrude along its normal.</p>
       <div class="layers-header segment-subhead">EXTRUDE</div>
       <div class="sketch-row"><label for="model-height">Height <output id="model-height-live"></output></label>
         <input id="model-height" type="number" step="any" aria-label="Extrusion height in metres (negative = opposite direction)" />
@@ -47,7 +40,7 @@ export function createModelPanel(
       <p class="sketch-status" id="model-status"></p>
     </div>`;
   const pick = <T extends HTMLElement>(selector: string): T => root.querySelector<T>(selector)!;
-  const shapeButtons = [...root.querySelectorAll<HTMLButtonElement>('[data-shape]')];
+  const shapeLabel = pick<HTMLParagraphElement>('#model-shape');
   const sides = pick<HTMLInputElement>('#model-sides');
   const sidesValue = pick<HTMLOutputElement>('#model-sides-value');
   const ortho = pick<HTMLInputElement>('#model-ortho');
@@ -59,10 +52,11 @@ export function createModelPanel(
 
   const render = (): void => {
     const model = viewer.document;
-    root.hidden = !model || model.layers.length === 0;
-    shapeButtons.forEach((button) =>
-      button.setAttribute('aria-pressed', String(button.dataset.shape === settings.shape)),
-    );
+    // Contextual: while drawing (Model tool) or while a face is selected for extrusion.
+    root.hidden =
+      !model || model.layers.length === 0 || (viewer.tool !== 'polyline' && !gizmo.target);
+    const shape = settings.shape;
+    shapeLabel.textContent = `Shape: ${shape[0]!.toUpperCase() + shape.slice(1)} — pick another from the Model button in the toolbar (P).`;
     sides.value = String(settings.sides);
     sidesValue.value = String(settings.sides);
     sides.disabled = settings.shape !== 'polygon';
@@ -84,9 +78,6 @@ export function createModelPanel(
         : `“${target.name}” pulled ${Math.abs(pending).toFixed(3)} m — pull again, adjust the height, then Confirm (Enter) or Reset.`;
   };
 
-  shapeButtons.forEach((button) =>
-    button.addEventListener('click', () => settings.setShape(button.dataset.shape as ShapeMode)),
-  );
   sides.addEventListener('input', () => settings.setSides(Number(sides.value)));
   ortho.addEventListener('change', () => settings.setOrtho(ortho.checked));
   const applyHeight = (): void => {
@@ -125,6 +116,7 @@ export function createModelPanel(
     render();
   };
   viewer.addEventListener('document-changed', observe);
+  viewer.addEventListener('tool-changed', render);
   settings.addEventListener('settings-changed', render);
   gizmo.addEventListener('target-changed', render);
   gizmo.addEventListener('preview', onPreview);
@@ -133,6 +125,7 @@ export function createModelPanel(
   return {
     dispose: (): void => {
       viewer.removeEventListener('document-changed', observe);
+      viewer.removeEventListener('tool-changed', render);
       settings.removeEventListener('settings-changed', render);
       gizmo.removeEventListener('target-changed', render);
       gizmo.removeEventListener('preview', onPreview);

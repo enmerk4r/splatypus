@@ -235,12 +235,13 @@ export class Viewer extends EventTarget {
   }
 
   setGridVisible(visible: boolean): void {
+    if (visible === this.grid.isVisible) return;
     this.grid.setVisible(visible);
+    this.dispatchEvent(new Event('settings-changed'));
   }
 
   toggleGrid(): void {
     this.setGridVisible(!this.grid.isVisible);
-    this.dispatchEvent(new Event('settings-changed'));
   }
 
   setUpAxis(axis: UpAxis): void {
